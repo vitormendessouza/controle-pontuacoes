@@ -157,6 +157,24 @@ export default function App() {
     }
   }
 
+  function removerDesafio(id: string) {
+    const d = desafios.find(x => x.id === id);
+    if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
+      return;
+    }
+    // 1) Apaga as pontuações do desafio
+    supabase.from('pontuacoes').delete().eq('desafio_id', id)
+      .then(() =>
+        // 2) Apaga o desafio
+        supabase.from('desafios').delete().eq('id', id)
+      )
+      .then(() => loadAll())
+      .catch(err => {
+        console.error(err);
+        alert('Falha ao excluir desafio. Veja o console para detalhes.');
+      });
+  }
+
   async function criarPessoa() {
     setErroPessoa('');
     const nome = (novaPessoa.nome || '').trim();
