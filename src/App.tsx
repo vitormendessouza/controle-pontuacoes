@@ -243,7 +243,7 @@ export default function App() {
                   <label>Descrição</label>
                   <textarea rows={3} value={novoDesafio.descricao} onChange={e=>setNovoDesafio({...novoDesafio, descricao:e.target.value})}/>
                 </div>
-                {role==='admin' && <button onClick={criarDesafio}>Adicionar</button>}
+                <button onClick={criarDesafio}>Adicionar</button>
               </div>
             </div>
 
@@ -252,7 +252,7 @@ export default function App() {
               <table>
                 <thead>
                 <tr>
-                  <th>Nº</th><th>Nome</th><th>Descrição</th><th className="text-right">Pontuação Máxima</th>{role==='admin'&&<th className="text-right">Ações</th>}
+                  <th>Nº</th><th>Nome</th><th>Descrição</th><th className="text-right">Pontuação Máxima</th><th className="text-right">Ações</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -262,11 +262,9 @@ export default function App() {
                     <td>{d.nome}</td>
                     <td className="muted">{d.descricao}</td>
                     <td className="text-right">{d.pontuacao_max}</td>
-                    {role==='admin' && (
-                      <td className="text-right">
-                        <button className="ghost" onClick={()=>removerDesafio(d.id)}>Excluir</button>
-                      </td>
-                    )}
+                    <td className="text-right">
+                      <button className="ghost" onClick={()=>removerDesafio(d.id)}>Excluir</button>
+                    </td>
                   </tr>
                 ))}
                 </tbody>
@@ -289,7 +287,7 @@ export default function App() {
                   <input value={novaPessoa.nome} onChange={e=>{ setNovaPessoa({nome: e.target.value}); setErroPessoa('') }} />
                   {erroPessoa && <div className="muted danger">{erroPessoa}</div>}
                 </div>
-                {role==='admin' && <button onClick={criarPessoa}>Adicionar</button>}
+                <button onClick={criarPessoa}>Adicionar</button>
               </div>
             </div>
 
@@ -300,7 +298,7 @@ export default function App() {
                 <tr>
                   <th>Nº Inscrição</th><th>Nome</th>
                   {desafios.map(d=><th key={d.id} className="text-right">{d.nome} <span className="muted">/ {d.pontuacao_max}</span></th>)}
-                  {role==='admin' && <th className="text-right">Ações</th>}
+                  <button onClick={criarPessoa}>Adicionar</button>
                 </tr>
                 </thead>
                 <tbody>
@@ -316,15 +314,13 @@ export default function App() {
                           min={0}
                           max={d.pontuacao_max}
                           value={mapPont.get(p.id)?.get(d.id) ?? 0}
-                          onChange={e=> role==='admin' && atualizarPontuacao(p.id, d.id, Math.max(0, Math.min(Number(d.pontuacao_max), Number(e.target.value))))}
+                          onChange={e=> atualizarPontuacao(p.id, d.id, Math.max(0, Math.min(Number(d.pontuacao_max), Number(e.target.value))))}
                         />
                       </td>
                     ))}
-                    {role==='admin' && (
-                      <td className="text-right">
-                        <button className="ghost" onClick={()=>removerPessoa(p.id)}>Excluir</button>
-                      </td>
-                    )}
+                    <td className="text-right">
+                      <button className="ghost" onClick={()=>removerDesafio(d.id)}>Excluir</button>
+                    </td>
                   </tr>
                 ))}
                 </tbody>
