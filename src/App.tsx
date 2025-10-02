@@ -70,9 +70,7 @@ export default function App() {
     if (error) { setLoginErr(error.message); return }
     setAuthed(!!data.session)
   }
-  async function doLogout() {
-    await supabase.auth.signOut()
-  }
+  async function doLogout() { await supabase.auth.signOut() }
 
   async function loadAll() {
     const [d1, d2, d3] = await Promise.all([
@@ -100,7 +98,10 @@ export default function App() {
     return m
   }, [pessoas, pontuacoes])
 
-  const pessoasComScores = useMemo(() => pessoas.map(p => ({ id: p.id, nome: p.nome, pontuacoes: mapPont.get(p.id) || new Map() })), [pessoas, mapPont])
+  const pessoasComScores = useMemo(
+    () => pessoas.map(p => ({ id: p.id, nome: p.nome, pontuacoes: mapPont.get(p.id) || new Map() })),
+    [pessoas, mapPont]
+  )
 
   const rankingPorDesafio = useMemo(() => {
     const obj: Record<string, {lista: Array<{pessoa:string; score:number}>}> = {}
@@ -134,10 +135,15 @@ export default function App() {
     if (!nome) { setErroDesafio('Informe o nome do desafio.'); return }
     if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return }
     const numero = nextSequential(desafios as any, 'numero' as any, 1)
-    const { data, error } = await supabase.from('desafios').insert([{ numero, nome, descricao: (novoDesafio.descricao||'').trim(), pontuacao_max: Number(novoDesafio.pontuacaoMax)||0 }]).select().single()
+    const { data, error } = await supabase.from('desafios').insert([{
+      numero, nome, descricao: (novoDesafio.descricao||'').trim(), pontuacao_max: Number(novoDesafio.pontuacaoMax)||0
+    }]).select().single()
     if (error) { setErroDesafio(error.message); return }
-    setDesafios(prev => [...prev, data as any]); setNovoDesafio({ nome:'', descricao:'', pontuacaoMax: 100 }); setErroDesafio('')
+    setDesafios(prev => [...prev, data as any])
+    setNovoDesafio({ nome:'', descricao:'', pontuacaoMax: 100 })
+    setErroDesafio('')
   }
+
   function removerDesafio(id: string) {
     const d = desafios.find(x => x.id === id)
     if (confirm(`Excluir o desafio "${d?.nome}"?`)) {
@@ -152,8 +158,11 @@ export default function App() {
     const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1)
     const { data, error } = await supabase.from('pessoas').insert([{ inscricao, nome }]).select().single()
     if (error) { setErroPessoa(error.message); return }
-    setPessoas(prev => [...prev, data as any]); setNovaPessoa({ nome: '' }); setErroPessoa('')
+    setPessoas(prev => [...prev, data as any])
+    setNovaPessoa({ nome: '' })
+    setErroPessoa('')
   }
+
   function removerPessoa(id: string) {
     const p = pessoas.find(x => x.id === id)
     if (confirm(`Excluir a pessoa "${p?.nome}"?`)) {
@@ -218,6 +227,7 @@ export default function App() {
           {role==='admin' && <div className={`tab ${tab==='config'?'active':''}`} onClick={()=>setTab('config')}>Configurações</div>}
         </div>
 
+        {/* DESAFIOS */}
         {tab==='desafios' && (
           <div className="row row-2">
             <div className="card">
@@ -230,13 +240,20 @@ export default function App() {
                   </div>
                   <div>
                     <label>Pontuação Máxima</label>
-                    <input type="number" min={0} value={novoDesafio.pontuacaoMax}
-                           onChange={e=>setNovoDesafio({...novoDesafio, pontuacaoMax: Number(e.target.value)})}/>
+                    <input
+                      type="number"
+                      min={0}
+                      value={novoDesafio.pontuacaoMax}
+                      onChange={e=>setNovoDesafio({...novoDesafio, pontuacaoMax: Number(e.target.value)})}
+                    />
                   </div>
                 </div>
                 <div>
                   <label>Nome</label>
-                  <input value={novoDesafio.nome} onChange={e=>{ setNovoDesafio({...novoDesafio, nome:e.target.value}); setErroDesafio('') }} />
+                  <input
+                    value={novoDesafio.nome}
+                    onChange={e=>{ setNovoDesafio({...novoDesafio, nome:e.target.value}); setErroDesafio('') }}
+                  />
                   {erroDesafio && <div className="muted danger">{erroDesafio}</div>}
                 </div>
                 <div>
@@ -251,28 +268,33 @@ export default function App() {
               <h3>Lista de Desafios</h3>
               <table>
                 <thead>
-                <tr>
-                  <th>Nº</th><th>Nome</th><th>Descrição</th><th className="text-right">Pontuação Máxima</th><th className="text-right">Ações</th>
-                </tr>
+                  <tr>
+                    <th>Nº</th>
+                    <th>Nome</th>
+                    <th>Descrição</th>
+                    <th className="text-right">Pontuação Máxima</th>
+                    <th className="text-right">Ações</th>
+                  </tr>
                 </thead>
                 <tbody>
-                {desafios.map(d=>(
-                  <tr key={d.id}>
-                    <td>{d.numero}</td>
-                    <td>{d.nome}</td>
-                    <td className="muted">{d.descricao}</td>
-                    <td className="text-right">{d.pontuacao_max}</td>
-                    <td className="text-right">
-                      <button className="ghost" onClick={()=>removerDesafio(d.id)}>Excluir</button>
-                    </td>
-                  </tr>
-                ))}
+                  {desafios.map(d=>(
+                    <tr key={d.id}>
+                      <td>{d.numero}</td>
+                      <td>{d.nome}</td>
+                      <td className="muted">{d.descricao}</td>
+                      <td className="text-right">{d.pontuacao_max}</td>
+                      <td className="text-right">
+                        <button className="ghost" onClick={()=>removerDesafio(d.id)}>Excluir</button>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
+        {/* PESSOAS */}
         {tab==='pessoas' && (
           <div className="row row-2">
             <div className="card">
@@ -284,9 +306,13 @@ export default function App() {
                 </div>
                 <div>
                   <label>Nome</label>
-                  <input value={novaPessoa.nome} onChange={e=>{ setNovaPessoa({nome: e.target.value}); setErroPessoa('') }} />
+                  <input
+                    value={novaPessoa.nome}
+                    onChange={e=>{ setNovaPessoa({nome: e.target.value}); setErroPessoa('') }}
+                  />
                   {erroPessoa && <div className="muted danger">{erroPessoa}</div>}
                 </div>
+                {/* Botão fica no formulário, não na tabela */}
                 <button onClick={criarPessoa}>Adicionar</button>
               </div>
             </div>
@@ -295,40 +321,52 @@ export default function App() {
               <h3>Lista de Pessoas e Pontuações</h3>
               <table>
                 <thead>
-                <tr>
-                  <th>Nº Inscrição</th><th>Nome</th>
-                  {desafios.map(d=><th key={d.id} className="text-right">{d.nome} <span className="muted">/ {d.pontuacao_max}</span></th>)}
-                  <button onClick={criarPessoa}>Adicionar</button>
-                </tr>
+                  <tr>
+                    <th>Nº Inscrição</th>
+                    <th>Nome</th>
+                    {desafios.map(d=>(
+                      <th key={d.id} className="text-right">
+                        {d.nome} <span className="muted">/ {d.pontuacao_max}</span>
+                      </th>
+                    ))}
+                    <th className="text-right">Ações</th>
+                  </tr>
                 </thead>
                 <tbody>
-                {pessoas.map(p=>(
-                  <tr key={p.id}>
-                    <td>{p.inscricao}</td>
-                    <td><strong>{p.nome}</strong></td>
-                    {desafios.map(d=>(
-                      <td key={d.id} className="text-right">
-                        <input
-                          style={{width:80, textAlign:'right'}}
-                          type="number"
-                          min={0}
-                          max={d.pontuacao_max}
-                          value={mapPont.get(p.id)?.get(d.id) ?? 0}
-                          onChange={e=> atualizarPontuacao(p.id, d.id, Math.max(0, Math.min(Number(d.pontuacao_max), Number(e.target.value))))}
-                        />
+                  {pessoas.map(p=>(
+                    <tr key={p.id}>
+                      <td>{p.inscricao}</td>
+                      <td><strong>{p.nome}</strong></td>
+                      {desafios.map(d=>(
+                        <td key={d.id} className="text-right">
+                          <input
+                            style={{width:80, textAlign:'right'}}
+                            type="number"
+                            min={0}
+                            max={d.pontuacao_max}
+                            value={mapPont.get(p.id)?.get(d.id) ?? 0}
+                            onChange={e =>
+                              atualizarPontuacao(
+                                p.id,
+                                d.id,
+                                Math.max(0, Math.min(Number(d.pontuacao_max), Number(e.target.value)))
+                              )
+                            }
+                          />
+                        </td>
+                      ))}
+                      <td className="text-right">
+                        <button className="ghost" onClick={()=>removerPessoa(p.id)}>Excluir</button>
                       </td>
-                    ))}
-                    <td className="text-right">
-                      <button className="ghost" onClick={()=>removerDesafio(d.id)}>Excluir</button>
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
+        {/* RANKING POR DESAFIO */}
         {tab==='rankingDesafio' && (
           <div className="card">
             <h3>Ranking por Desafio</h3>
@@ -342,29 +380,31 @@ export default function App() {
               <table>
                 <thead><tr><th>#</th><th>Participante</th><th className="text-right">Pontuação</th></tr></thead>
                 <tbody>
-                {(rankingPorDesafio[desafioSelecionado]?.lista||[]).map((r,i)=>(
-                  <tr key={r.pessoa+i}><td>{i+1}</td><td>{r.pessoa}</td><td className="text-right">{r.score}</td></tr>
-                ))}
+                  {(rankingPorDesafio[desafioSelecionado]?.lista||[]).map((r,i)=>(
+                    <tr key={r.pessoa+i}><td>{i+1}</td><td>{r.pessoa}</td><td className="text-right">{r.score}</td></tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
+        {/* RANKING GERAL */}
         {tab==='rankingGeral' && (
           <div className="card">
             <h3>Ranking Geral</h3>
             <table>
               <thead><tr><th>#</th><th>Participante</th><th className="text-right">Total</th><th className="text-right">Máximo possível</th></tr></thead>
               <tbody>
-              {rankingGeral.map((r,i)=>(
-                <tr key={r.pessoa}><td>{i+1}</td><td>{r.pessoa}</td><td className="text-right">{r.total}</td><td className="text-right muted">{r.max}</td></tr>
-              ))}
+                {rankingGeral.map((r,i)=>(
+                  <tr key={r.pessoa}><td>{i+1}</td><td>{r.pessoa}</td><td className="text-right">{r.total}</td><td className="text-right muted">{r.max}</td></tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
 
+        {/* TABELA GERAL */}
         {tab==='tabelaGeral' && (
           <div className="card" style={{overflowX:'auto'}}>
             <h3>Classificação Geral</h3>
@@ -377,23 +417,27 @@ export default function App() {
                 </tr>
               </thead>
               <tbody>
-              {tabelaGeral.map((row, idx)=>(
-                <tr key={row.id}>
-                  <td>{idx+1}</td>
-                  <td><strong>{row.pessoa}</strong></td>
-                  {row.porDesafio.map(c => <td key={c.desafioId} className="text-right">{c.score}</td>)}
-                  <td className="text-right"><strong>{row.total}</strong></td>
-                </tr>
-              ))}
+                {tabelaGeral.map((row, idx)=>(
+                  <tr key={row.id}>
+                    <td>{idx+1}</td>
+                    <td><strong>{row.pessoa}</strong></td>
+                    {row.porDesafio.map(c => <td key={c.desafioId} className="text-right">{c.score}</td>)}
+                    <td className="text-right"><strong>{row.total}</strong></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
 
+        {/* CONFIG (apenas admin) */}
         {tab==='config' && role==='admin' && (
           <div className="card">
             <h3>Configurações</h3>
-            <p className="muted">Usuários e senhas são gerenciados no painel do Supabase (Authentication → Users). Para trocar seu e-mail/senha, use o painel ou implemente uma tela de atualização via <code>supabase.auth.updateUser</code>.</p>
+            <p className="muted">
+              Usuários e senhas são gerenciados no painel do Supabase (Authentication → Users).
+              Para trocar seu e-mail/senha via app, implemente <code>supabase.auth.updateUser</code>.
+            </p>
           </div>
         )}
       </div>
