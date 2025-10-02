@@ -35,6 +35,10 @@ export default function App() {
 
   const [desafioSelecionado, setDesafioSelecionado] = useState<string>('')
 
+  // feedback visual nos botões
+  const [savingDesafio, setSavingDesafio] = useState(false)
+  const [savingPessoa, setSavingPessoa] = useState(false)
+
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
       const u = data.session?.user
@@ -130,14 +134,16 @@ export default function App() {
     }).sort((a,b) => b.total - a.total || a.pessoa.localeCompare(b.pessoa))
   }, [desafios, pessoasComScores])
 
+  // === Criar / Remover Desafio ===
   async function criarDesafio() {
-    setErroDesafio('');
-    const nome = (novoDesafio.nome || '').trim();
-    if (!nome) { setErroDesafio('Informe o nome do desafio.'); return; }
-    if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return; }
-  
+    setErroDesafio('')
+    setSavingDesafio(true)
     try {
-      const numero = nextSequential(desafios as any, 'numero' as any, 1);
+      const nome = (novoDesafio.nome || '').trim()
+      if (!nome) { setErroDesafio('Informe o nome do desafio.'); return }
+      if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return }
+
+      const numero = nextSequential(desafios as any, 'numero' as any, 1)
       const { error } = await supabase
         .from('desafios')
         .insert([{
@@ -145,54 +151,56 @@ export default function App() {
           nome,
           descricao: (novoDesafio.descricao || '').trim(),
           pontuacao_max: Number(novoDesafio.pontuacaoMax) || 0
-        }]);
-  
-      if (error) throw error;
-  
-      // Recarrega do banco para garantir que a lista reflita o servidor
-      await loadAll();
-      setNovoDesafio({ nome: '', descricao: '', pontuacaoMax: 100 });
+        }])
+
+      if (error) throw error
+
+      await loadAll() // garante refletir o servidor
+      setNovoDesafio({ nome: '', descricao: '', pontuacaoMax: 100 })
     } catch (err: any) {
-      setErroDesafio(err?.message || 'Falha ao salvar o desafio.');
+      setErroDesafio(err?.message || 'Falha ao salvar o desafio.')
+    } finally {
+      setSavingDesafio(false)
     }
   }
 
   function removerDesafio(id: string) {
-    const d = desafios.find(x => x.id === id);
+    const d = desafios.find(x => x.id === id)
     if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
-      return;
+      return
     }
-    // 1) Apaga as pontuações do desafio
+    // Remove apenas as pontuações do desafio e depois o desafio
     supabase.from('pontuacoes').delete().eq('desafio_id', id)
-      .then(() =>
-        // 2) Apaga o desafio
-        supabase.from('desafios').delete().eq('id', id)
-      )
+      .then(() => supabase.from('desafios').delete().eq('id', id))
       .then(() => loadAll())
       .catch(err => {
-        console.error(err);
-        alert('Falha ao excluir desafio. Veja o console para detalhes.');
-      });
+        console.error(err)
+        alert('Falha ao excluir desafio. Veja o console para detalhes.')
+      })
   }
 
+  // === Criar / Remover Pessoa ===
   async function criarPessoa() {
-    setErroPessoa('');
-    const nome = (novaPessoa.nome || '').trim();
-    if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return; }
-    if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return; }
-  
+    setErroPessoa('')
+    setSavingPessoa(true)
     try {
-      const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1);
+      const nome = (novaPessoa.nome || '').trim()
+      if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return }
+      if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return }
+
+      const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1)
       const { error } = await supabase
         .from('pessoas')
-        .insert([{ inscricao, nome }]);
-  
-      if (error) throw error;
-  
-      await loadAll();
-      setNovaPessoa({ nome: '' });
+        .insert([{ inscricao, nome }])
+
+      if (error) throw error
+
+      await loadAll()
+      setNovaPessoa({ nome: '' })
     } catch (err: any) {
-      setErroPessoa(err?.message || 'Falha ao salvar a pessoa.');
+      setErroPessoa(err?.message || 'Falha ao salvar a pessoa.')
+    } finally {
+      setSavingPessoa(false)
     }
   }
 
@@ -203,6 +211,7 @@ export default function App() {
     }
   }
 
+  // === Atualizar pontuação ===
   async function atualizarPontuacao(pessoaId: string, desafioId: string, valor: number) {
     const v = Math.max(0, Number(valor) || 0)
     const { error } = await supabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
@@ -293,7 +302,9 @@ export default function App() {
                   <label>Descrição</label>
                   <textarea rows={3} value={novoDesafio.descricao} onChange={e=>setNovoDesafio({...novoDesafio, descricao:e.target.value})}/>
                 </div>
-                <button onClick={criarDesafio}>Adicionar</button>
+                <button onClick={criarDesafio} disabled={savingDesafio}>
+                  {savingDesafio ? 'Salvando...' : 'Adicionar'}
+                </button>
               </div>
             </div>
 
@@ -345,8 +356,9 @@ export default function App() {
                   />
                   {erroPessoa && <div className="muted danger">{erroPessoa}</div>}
                 </div>
-                {/* Botão fica no formulário, não na tabela */}
-                <button onClick={criarPessoa}>Adicionar</button>
+                <button onClick={criarPessoa} disabled={savingPessoa}>
+                  {savingPessoa ? 'Salvando...' : 'Adicionar'}
+                </button>
               </div>
             </div>
 
