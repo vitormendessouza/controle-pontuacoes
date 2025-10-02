@@ -6,6 +6,7 @@ type TDesafio = { id: string; numero: number; nome: string; descricao: string | 
 type TPessoa = { id: string; inscricao: number; nome: string }
 type TPontuacao = { pessoa_id: string; desafio_id: string; score: number }
 
+/* utils */
 function norm(s: string) { return (s ?? '').trim().toLowerCase() }
 function nameExists<T extends { nome: string }>(arr: T[], nome: string) {
   const n = norm(nome); return arr.some(a => norm(a.nome) === n)
@@ -13,6 +14,12 @@ function nameExists<T extends { nome: string }>(arr: T[], nome: string) {
 function nextSequential<T>(arr: T[], field: keyof T, start = 1) {
   const nums = arr.map((it: any) => Number(it?.[field]) || 0).filter(n => n > 0)
   return nums.length ? Math.max(...nums) + 1 : start
+}
+function withTimeout<T>(p: Promise<T>, ms = 12000): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, rej) => setTimeout(() => rej(new Error('Timeout na chamada ao Supabase.')), ms)),
+  ]) as Promise<T>;
 }
 
 export default function App() {
@@ -35,9 +42,13 @@ export default function App() {
 
   const [desafioSelecionado, setDesafioSelecionado] = useState<string>('')
 
-  // feedback visual nos botões
+  /* feedback visual */
   const [savingDesafio, setSavingDesafio] = useState(false)
   const [savingPessoa, setSavingPessoa] = useState(false)
+
+  /* debug/erros de API */
+  const [lastApiError, setLastApiError] = useState<string>('')
+  const [lastApiDebug, setLastApiDebug] = useState<any>(null) // opcional p/ console
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -134,35 +145,38 @@ export default function App() {
     }).sort((a,b) => b.total - a.total || a.pessoa.localeCompare(b.pessoa))
   }, [desafios, pessoasComScores])
 
-  // === Criar / Remover Desafio ===
+  /* === criar/remover DESAFIO === */
   async function criarDesafio() {
-    // 1) Validações antes de ligar o saving
-    setErroDesafio('');
-    const nome = (novoDesafio.nome || '').trim();
-    if (!nome) { setErroDesafio('Informe o nome do desafio.'); return; }
-    if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return; }
-  
-    setSavingDesafio(true);
+    setErroDesafio(''); setLastApiError(''); setLastApiDebug(null)
+
+    // validações ANTES do saving
+    const nome = (novoDesafio.nome || '').trim()
+    if (!nome) { setErroDesafio('Informe o nome do desafio.'); return }
+    if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return }
+
+    setSavingDesafio(true)
     try {
-      const numero = nextSequential(desafios as any, 'numero' as any, 1);
-      const { error } = await supabase
-        .from('desafios')
-        .insert([{
-          numero,
-          nome,
-          descricao: (novoDesafio.descricao || '').trim(),
-          pontuacao_max: Number(novoDesafio.pontuacaoMax) || 0
-        }]);
-  
-      if (error) throw error;
-  
-      await loadAll(); // garante refletir a lista
-      setNovoDesafio({ nome: '', descricao: '', pontuacaoMax: 100 });
+      const numero = nextSequential(desafios as any, 'numero' as any, 1)
+
+      const resp = await withTimeout(
+        supabase.from('desafios')
+          .insert([{ numero, nome, descricao: (novoDesafio.descricao||'').trim(), pontuacao_max: Number(novoDesafio.pontuacaoMax)||0 }])
+          .select('*'),
+        12000
+      )
+
+      setLastApiDebug({ op: 'insert:desafios', resp })
+      // @ts-ignore
+      if (resp?.error) throw resp.error
+
+      await loadAll()
+      setNovoDesafio({ nome: '', descricao: '', pontuacaoMax: 100 })
     } catch (err: any) {
-      console.error('[criarDesafio]', err);
-      setErroDesafio(err?.message || 'Falha ao salvar o desafio.');
+      console.error('[criarDesafio] err:', err)
+      setLastApiError(err?.message || 'Falha ao salvar o desafio.')
+      setErroDesafio(err?.message || 'Falha ao salvar o desafio.')
     } finally {
-      setSavingDesafio(false);
+      setSavingDesafio(false)
     }
   }
 
@@ -171,7 +185,6 @@ export default function App() {
     if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
       return
     }
-    // Remove apenas as pontuações do desafio e depois o desafio
     supabase.from('pontuacoes').delete().eq('desafio_id', id)
       .then(() => supabase.from('desafios').delete().eq('id', id))
       .then(() => loadAll())
@@ -181,30 +194,35 @@ export default function App() {
       })
   }
 
-  // === Criar / Remover Pessoa ===
+  /* === criar/remover PESSOA === */
   async function criarPessoa() {
-    // 1) Validações antes de ligar o saving
-    setErroPessoa('');
-    const nome = (novaPessoa.nome || '').trim();
-    if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return; }
-    if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return; }
-  
-    setSavingPessoa(true);
+    setErroPessoa(''); setLastApiError(''); setLastApiDebug(null)
+
+    const nome = (novaPessoa.nome || '').trim()
+    if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return }
+    if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return }
+
+    setSavingPessoa(true)
     try {
-      const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1);
-      const { error } = await supabase
-        .from('pessoas')
-        .insert([{ inscricao, nome }]);
-  
-      if (error) throw error;
-  
-      await loadAll();
-      setNovaPessoa({ nome: '' });
+      const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1)
+
+      const resp = await withTimeout(
+        supabase.from('pessoas').insert([{ inscricao, nome }]).select('*'),
+        12000
+      )
+
+      setLastApiDebug({ op: 'insert:pessoas', resp })
+      // @ts-ignore
+      if (resp?.error) throw resp.error
+
+      await loadAll()
+      setNovaPessoa({ nome: '' })
     } catch (err: any) {
-      console.error('[criarPessoa]', err);
-      setErroPessoa(err?.message || 'Falha ao salvar a pessoa.');
+      console.error('[criarPessoa] err:', err)
+      setLastApiError(err?.message || 'Falha ao salvar a pessoa.')
+      setErroPessoa(err?.message || 'Falha ao salvar a pessoa.')
     } finally {
-      setSavingPessoa(false);
+      setSavingPessoa(false)
     }
   }
 
@@ -215,7 +233,7 @@ export default function App() {
     }
   }
 
-  // === Atualizar pontuação ===
+  /* === atualizar pontuação === */
   async function atualizarPontuacao(pessoaId: string, desafioId: string, valor: number) {
     const v = Math.max(0, Number(valor) || 0)
     const { error } = await supabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
@@ -298,7 +316,7 @@ export default function App() {
                   <label>Nome</label>
                   <input
                     value={novoDesafio.nome}
-                    onChange={e=>{ setNovoDesafio({...novoDesafio, nome:e.target.value}); setErroDesafio('') }}
+                    onChange={e=>{ setNovoDesafio({...novoDesafio, nome:e.target.value}); setErroDesafio(''); setLastApiError('') }}
                   />
                   {erroDesafio && <div className="muted danger">{erroDesafio}</div>}
                 </div>
@@ -309,6 +327,7 @@ export default function App() {
                 <button onClick={criarDesafio} disabled={savingDesafio}>
                   {savingDesafio ? 'Salvando...' : 'Adicionar'}
                 </button>
+                {lastApiError && <div className="muted danger" style={{marginTop:8}}>{lastApiError}</div>}
               </div>
             </div>
 
@@ -356,13 +375,14 @@ export default function App() {
                   <label>Nome</label>
                   <input
                     value={novaPessoa.nome}
-                    onChange={e=>{ setNovaPessoa({nome: e.target.value}); setErroPessoa('') }}
+                    onChange={e=>{ setNovaPessoa({nome: e.target.value}); setErroPessoa(''); setLastApiError('') }}
                   />
                   {erroPessoa && <div className="muted danger">{erroPessoa}</div>}
                 </div>
                 <button onClick={criarPessoa} disabled={savingPessoa}>
                   {savingPessoa ? 'Salvando...' : 'Adicionar'}
                 </button>
+                {lastApiError && <div className="muted danger" style={{marginTop:8}}>{lastApiError}</div>}
               </div>
             </div>
 
@@ -487,6 +507,12 @@ export default function App() {
               Usuários e senhas são gerenciados no painel do Supabase (Authentication → Users).
               Para trocar seu e-mail/senha via app, implemente <code>supabase.auth.updateUser</code>.
             </p>
+            {lastApiDebug && (
+              <details style={{marginTop:12}}>
+                <summary>Debug da última chamada</summary>
+                <pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(lastApiDebug, null, 2)}</pre>
+              </details>
+            )}
           </div>
         )}
       </div>
