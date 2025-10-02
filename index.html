@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Controle de Pontuações</title>
+    <style>
+      body { font-family: system-ui, Arial, sans-serif; background: #f6f7fb; margin: 0; color: #111; }
+      .wrap { max-width: 1100px; margin: 0 auto; padding: 20px; }
+      header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 16px;}
+      h1 { margin: 0; font-size: 22px; }
+      .card { background: #fff; border-radius: 14px; box-shadow: 0 6px 18px rgba(16,24,40,.06); padding: 16px; margin-bottom: 16px;}
+      .row { display: grid; grid-template-columns: 1fr; gap: 12px; }
+      @media (min-width: 900px){ .row-2 { grid-template-columns: 1fr 2fr; } .row-3 { grid-template-columns: 1fr 2fr; } }
+      label { display:block; font-size: 12px; color: #555; margin-bottom: 6px;}
+      input, textarea, select { width: 100%; padding: 10px; border: 1px solid #dcdfe4; border-radius: 10px; font-size: 14px; background: #fff; }
+      button { padding: 10px 14px; border: 0; background: #111827; color: #fff; border-radius: 10px; cursor: pointer; font-weight: 600;}
+      button.ghost { background: #e8e9ee; color: #111; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px;}
+      th.text-right, td.text-right { text-align: right; }
+      .tabs { display:flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;}
+      .tab { padding: 8px 12px; border-radius: 10px; background: #eef0f6; cursor: pointer; }
+      .tab.active { background: #fff; box-shadow: 0 6px 18px rgba(16,24,40,.06); }
+      .muted { color: #6b7280; font-size: 12px;}
+      .danger { color: #b91c1c; }
+      .success { color: #0a7c3b; }
+      .grid { display: grid; gap: 12px; }
+      .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
