@@ -15,12 +15,6 @@ function nextSequential<T>(arr: T[], field: keyof T, start = 1) {
   const nums = arr.map((it: any) => Number(it?.[field]) || 0).filter(n => n > 0)
   return nums.length ? Math.max(...nums) + 1 : start
 }
-function withTimeout<T>(p: Promise<T>, ms = 12000): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>((_, rej) => setTimeout(() => rej(new Error('Timeout na chamada ao Supabase.')), ms)),
-  ]) as Promise<T>;
-}
 
 export default function App() {
   const [tab, setTab] = useState<'desafios'|'pessoas'|'rankingDesafio'|'rankingGeral'|'tabelaGeral'|'config'>('desafios')
@@ -46,9 +40,9 @@ export default function App() {
   const [savingDesafio, setSavingDesafio] = useState(false)
   const [savingPessoa, setSavingPessoa] = useState(false)
 
-  /* debug/erros de API */
+  /* debug/erros de API exibidos na UI */
   const [lastApiError, setLastApiError] = useState<string>('')  // mostrado abaixo dos botões
-  const [lastApiDebug, setLastApiDebug] = useState<any>(null)   // visível em Configurações
+  const [lastApiDebug, setLastApiDebug] = useState<any>(null)   // visível em Configurações (opcional)
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -158,18 +152,23 @@ export default function App() {
     try {
       const numero = nextSequential(desafios as any, 'numero' as any, 1)
 
-      const resp = await withTimeout(
-        supabase.from('desafios')
-          .insert([{ numero, nome, descricao: (novoDesafio.descricao||'').trim(), pontuacao_max: Number(novoDesafio.pontuacaoMax)||0 }])
-          .select('*'),
-        12000
-      )
+      const resp = await supabase
+        .from('desafios')
+        .insert([{ numero, nome, descricao: (novoDesafio.descricao||'').trim(), pontuacao_max: Number(novoDesafio.pontuacaoMax)||0 }])
+        .select('*')
+        .single()
 
       setLastApiDebug({ op: 'insert:desafios', resp })
       // @ts-ignore
       if (resp?.error) throw resp.error
 
-      await loadAll()
+      // resp.data é o novo desafio
+      if ((resp as any).data) {
+        setDesafios(prev => [...prev, (resp as any).data as TDesafio])
+      } else {
+        await loadAll()
+      }
+
       setNovoDesafio({ nome: '', descricao: '', pontuacaoMax: 100 })
     } catch (err: any) {
       console.error('[criarDesafio] err:', err)
@@ -206,16 +205,21 @@ export default function App() {
     try {
       const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1)
 
-      const resp = await withTimeout(
-        supabase.from('pessoas').insert([{ inscricao, nome }]).select('*'),
-        12000
-      )
+      const resp = await supabase
+        .from('pessoas').insert([{ inscricao, nome }])
+        .select('*')
+        .single()
 
       setLastApiDebug({ op: 'insert:pessoas', resp })
       // @ts-ignore
       if (resp?.error) throw resp.error
 
-      await loadAll()
+      if ((resp as any).data) {
+        setPessoas(prev => [...prev, (resp as any).data as TPessoa])
+      } else {
+        await loadAll()
+      }
+
       setNovaPessoa({ nome: '' })
     } catch (err: any) {
       console.error('[criarPessoa] err:', err)
@@ -228,4 +232,308 @@ export default function App() {
 
   function removerPessoa(id: string) {
     const p = pessoas.find(x => x.id === id)
-    if (confirm(`Excluir a pessoa "${p?.
+    if (!confirm(`Excluir a pessoa "${p?.nome}"?`)) return
+    supabase.from('pessoas').delete().eq('id', id)
+      .then(() => loadAll())
+      .catch(err => {
+        console.error(err)
+        alert('Falha ao excluir pessoa. Veja o console para detalhes.')
+      })
+  }
+
+  /* === atualizar pontuação === */
+  async function atualizarPontuacao(pessoaId: string, desafioId: string, valor: number) {
+    const v = Math.max(0, Number(valor) || 0)
+    const { error } = await supabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
+    if (!error) {
+      setPontuacoes(prev => {
+        const idx = prev.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
+        if (idx >= 0) { const copy = [...prev]; copy[idx] = { pessoa_id: pessoaId, desafio_id: desafioId, score: v }; return copy }
+        return [...prev, { pessoa_id: pessoaId, desafio_id: desafioId, score: v }]
+      })
+    }
+  }
+
+  if (!authed) {
+    return (
+      <div className="wrap">
+        <div className="card" style={{maxWidth: 420, margin: '80px auto'}}>
+          <h2 style={{marginTop:0, textAlign:'center'}}>Acessar o Sistema</h2>
+          <form onSubmit={tryLogin} className="grid">
+            <div>
+              <label>E-mail</label>
+              <input value={login.email} onChange={e=>{ setLogin({...login, email:e.target.value}); setLoginErr('') }} placeholder="voce@exemplo.com" />
+            </div>
+            <div>
+              <label>Senha</label>
+              <input type="password" value={login.pass} onChange={e=>{ setLogin({...login, pass:e.target.value}); setLoginErr('') }} placeholder="Senha" />
+            </div>
+            {loginErr && <div className="muted danger">{loginErr}</div>}
+            <button type="submit">Entrar</button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="wrap">
+      <header>
+        <div>
+          <h1>Controle de Pontuações</h1>
+          <div className="muted">{new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}</div>
+        </div>
+        <div>
+          <span className="muted" style={{marginRight: 8}}>{email} {role==='admin'?'(admin)':''}</span>
+          <button className="ghost" onClick={doLogout}>Sair</button>
+        </div>
+      </header>
+
+      <div className="card">
+        <div className="tabs">
+          <div className={`tab ${tab==='desafios'?'active':''}`} onClick={()=>setTab('desafios')}>Desafios</div>
+          <div className={`tab ${tab==='pessoas'?'active':''}`} onClick={()=>setTab('pessoas')}>Pessoas</div>
+          <div className={`tab ${tab==='rankingDesafio'?'active':''}`} onClick={()=>setTab('rankingDesafio')}>Ranking por Desafio</div>
+          <div className={`tab ${tab==='rankingGeral'?'active':''}`} onClick={()=>setTab('rankingGeral')}>Ranking Geral</div>
+          <div className={`tab ${tab==='tabelaGeral'?'active':''}`} onClick={()=>setTab('tabelaGeral')}>Tabela Geral</div>
+          {role==='admin' && <div className={`tab ${tab==='config'?'active':''}`} onClick={()=>setTab('config')}>Configurações</div>}
+        </div>
+
+        {/* DESAFIOS */}
+        {tab==='desafios' && (
+          <div className="row row-2">
+            <div className="card">
+              <h3>Novo Desafio</h3>
+              <div className="grid">
+                <div className="grid grid-2">
+                  <div>
+                    <label>Nº do Desafio</label>
+                    <input value={nextSequential(desafios as any, 'numero' as any, 1)} readOnly />
+                  </div>
+                  <div>
+                    <label>Pontuação Máxima</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={novoDesafio.pontuacaoMax}
+                      onChange={e=>setNovoDesafio({...novoDesafio, pontuacaoMax: Number(e.target.value)})}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label>Nome</label>
+                  <input
+                    value={novoDesafio.nome}
+                    onChange={e=>{ setNovoDesafio({...novoDesafio, nome:e.target.value}); setErroDesafio(''); setLastApiError('') }}
+                  />
+                  {erroDesafio && <div className="muted danger">{erroDesafio}</div>}
+                </div>
+                <div>
+                  <label>Descrição</label>
+                  <textarea rows={3} value={novoDesafio.descricao} onChange={e=>setNovoDesafio({...novoDesafio, descricao:e.target.value})}/>
+                </div>
+                <button onClick={criarDesafio} disabled={savingDesafio}>
+                  {savingDesafio ? 'Salvando...' : 'Adicionar'}
+                </button>
+                {lastApiError && <div className="muted danger" style={{marginTop:8}}>{lastApiError}</div>}
+              </div>
+            </div>
+
+            <div className="card">
+              <h3>Lista de Desafios</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                  <tr>
+                    <th>Nº</th>
+                    <th>Nome</th>
+                    <th>Descrição</th>
+                    <th className="text-right">Pontuação Máxima</th>
+                    <th className="text-right">Ações</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {desafios.map(d=>(
+                    <tr key={d.id}>
+                      <td>{d.numero}</td>
+                      <td>{d.nome}</td>
+                      <td className="muted">{d.descricao}</td>
+                      <td className="text-right">{d.pontuacao_max}</td>
+                      <td className="text-right">
+                        <button className="ghost" onClick={()=>removerDesafio(d.id)} title="Excluir">🗑️</button>
+                      </td>
+                    </tr>
+                  ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* PESSOAS */}
+        {tab==='pessoas' && (
+          <div className="row row-2">
+            <div className="card">
+              <h3>Nova Pessoa</h3>
+              <div className="grid">
+                <div>
+                  <label>Nº Inscrição</label>
+                  <input value={nextSequential(pessoas as any, 'inscricao' as any, 1)} readOnly />
+                </div>
+                <div>
+                  <label>Nome</label>
+                  <input
+                    value={novaPessoa.nome}
+                    onChange={e=>{ setNovaPessoa({nome: e.target.value}); setErroPessoa(''); setLastApiError('') }}
+                  />
+                  {erroPessoa && <div className="muted danger">{erroPessoa}</div>}
+                </div>
+                <button onClick={criarPessoa} disabled={savingPessoa}>
+                  {savingPessoa ? 'Salvando...' : 'Adicionar'}
+                </button>
+                {lastApiError && <div className="muted danger" style={{marginTop:8}}>{lastApiError}</div>}
+              </div>
+            </div>
+
+            <div className="card" style={{overflowX:'auto'}}>
+              <h3>Lista de Pessoas e Pontuações</h3>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                  <tr>
+                    <th>Nº Inscrição</th>
+                    <th>Nome</th>
+                    {desafios.map(d=>(
+                      <th key={d.id} className="text-right">
+                        {d.nome} <span className="muted">/ {d.pontuacao_max}</span>
+                      </th>
+                    ))}
+                    <th className="text-right">Ações</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {pessoas.map(p=>(
+                    <tr key={p.id}>
+                      <td>{p.inscricao}</td>
+                      <td><strong>{p.nome}</strong></td>
+                      {desafios.map(d=>(
+                        <td key={d.id} className="text-right">
+                          <input
+                            style={{width:80, textAlign:'right'}}
+                            type="number"
+                            min={0}
+                            max={d.pontuacao_max}
+                            value={mapPont.get(p.id)?.get(d.id) ?? 0}
+                            onChange={e =>
+                              atualizarPontuacao(
+                                p.id,
+                                d.id,
+                                Math.max(0, Math.min(Number(d.pontuacao_max), Number(e.target.value)))
+                              )
+                            }
+                          />
+                        </td>
+                      ))}
+                      <td className="text-right">
+                        <button className="ghost" onClick={()=>removerPessoa(p.id)} title="Excluir">🗑️</button>
+                      </td>
+                    </tr>
+                  ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RANKING POR DESAFIO */}
+        {tab==='rankingDesafio' && (
+          <div className="card">
+            <h3>Ranking por Desafio</h3>
+            <div style={{maxWidth:340}}>
+              <label>Selecione o desafio</label>
+              <select value={desafioSelecionado} onChange={e=>setDesafioSelecionado(e.target.value)}>
+                {desafios.map(d=> <option key={d.id} value={d.id}>{d.nome}</option>)}
+              </select>
+            </div>
+            <div className="card" style={{marginTop:12}}>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>#</th><th>Participante</th><th className="text-right">Pontuação</th></tr></thead>
+                  <tbody>
+                  {(rankingPorDesafio[desafioSelecionado]?.lista||[]).map((r,i)=>(
+                    <tr key={r.pessoa+i}><td>{i+1}</td><td>{r.pessoa}</td><td className="text-right">{r.score}</td></tr>
+                  ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RANKING GERAL */}
+        {tab==='rankingGeral' && (
+          <div className="card">
+            <h3>Ranking Geral</h3>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>#</th><th>Participante</th><th className="text-right">Total</th><th className="text-right">Máximo possível</th></tr></thead>
+                <tbody>
+                {rankingGeral.map((r,i)=>(
+                  <tr key={r.pessoa}><td>{i+1}</td><td>{r.pessoa}</td><td className="text-right">{r.total}</td><td className="text-right muted">{r.max}</td></tr>
+                ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TABELA GERAL */}
+        {tab==='tabelaGeral' && (
+          <div className="card" style={{overflowX:'auto'}}>
+            <h3>Classificação Geral</h3>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th><th>Participante</th>
+                    {desafios.map(d=> <th key={d.id} className="text-right">{d.nome} <span className="muted">/ {d.pontuacao_max}</span></th>)}
+                    <th className="text-right">Total Pontuação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                {tabelaGeral.map((row, idx)=>(
+                  <tr key={row.id}>
+                    <td>{idx+1}</td>
+                    <td><strong>{row.pessoa}</strong></td>
+                    {row.porDesafio.map(c => <td key={c.desafioId} className="text-right">{c.score}</td>)}
+                    <td className="text-right"><strong>{row.total}</strong></td>
+                  </tr>
+                ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* CONFIG (apenas admin) */}
+        {tab==='config' && role==='admin' && (
+          <div className="card">
+            <h3>Configurações</h3>
+            <p className="muted">
+              Usuários e senhas são gerenciados no painel do Supabase (Authentication → Users).
+              Para trocar seu e-mail/senha via app, implemente <code>supabase.auth.updateUser</code>.
+            </p>
+            {lastApiDebug && (
+              <details style={{marginTop:12}}>
+                <summary>Debug da última chamada</summary>
+                <pre style={{whiteSpace:'pre-wrap'}}>{JSON.stringify(lastApiDebug, null, 2)}</pre>
+              </details>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
