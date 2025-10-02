@@ -136,14 +136,15 @@ export default function App() {
 
   // === Criar / Remover Desafio ===
   async function criarDesafio() {
-    setErroDesafio('')
-    setSavingDesafio(true)
+    // 1) Validações antes de ligar o saving
+    setErroDesafio('');
+    const nome = (novoDesafio.nome || '').trim();
+    if (!nome) { setErroDesafio('Informe o nome do desafio.'); return; }
+    if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return; }
+  
+    setSavingDesafio(true);
     try {
-      const nome = (novoDesafio.nome || '').trim()
-      if (!nome) { setErroDesafio('Informe o nome do desafio.'); return }
-      if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return }
-
-      const numero = nextSequential(desafios as any, 'numero' as any, 1)
+      const numero = nextSequential(desafios as any, 'numero' as any, 1);
       const { error } = await supabase
         .from('desafios')
         .insert([{
@@ -151,16 +152,17 @@ export default function App() {
           nome,
           descricao: (novoDesafio.descricao || '').trim(),
           pontuacao_max: Number(novoDesafio.pontuacaoMax) || 0
-        }])
-
-      if (error) throw error
-
-      await loadAll() // garante refletir o servidor
-      setNovoDesafio({ nome: '', descricao: '', pontuacaoMax: 100 })
+        }]);
+  
+      if (error) throw error;
+  
+      await loadAll(); // garante refletir a lista
+      setNovoDesafio({ nome: '', descricao: '', pontuacaoMax: 100 });
     } catch (err: any) {
-      setErroDesafio(err?.message || 'Falha ao salvar o desafio.')
+      console.error('[criarDesafio]', err);
+      setErroDesafio(err?.message || 'Falha ao salvar o desafio.');
     } finally {
-      setSavingDesafio(false)
+      setSavingDesafio(false);
     }
   }
 
@@ -181,26 +183,28 @@ export default function App() {
 
   // === Criar / Remover Pessoa ===
   async function criarPessoa() {
-    setErroPessoa('')
-    setSavingPessoa(true)
+    // 1) Validações antes de ligar o saving
+    setErroPessoa('');
+    const nome = (novaPessoa.nome || '').trim();
+    if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return; }
+    if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return; }
+  
+    setSavingPessoa(true);
     try {
-      const nome = (novaPessoa.nome || '').trim()
-      if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return }
-      if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return }
-
-      const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1)
+      const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1);
       const { error } = await supabase
         .from('pessoas')
-        .insert([{ inscricao, nome }])
-
-      if (error) throw error
-
-      await loadAll()
-      setNovaPessoa({ nome: '' })
+        .insert([{ inscricao, nome }]);
+  
+      if (error) throw error;
+  
+      await loadAll();
+      setNovaPessoa({ nome: '' });
     } catch (err: any) {
-      setErroPessoa(err?.message || 'Falha ao salvar a pessoa.')
+      console.error('[criarPessoa]', err);
+      setErroPessoa(err?.message || 'Falha ao salvar a pessoa.');
     } finally {
-      setSavingPessoa(false)
+      setSavingPessoa(false);
     }
   }
 
