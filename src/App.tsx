@@ -131,36 +131,51 @@ export default function App() {
   }, [desafios, pessoasComScores])
 
   async function criarDesafio() {
-    const nome = (novoDesafio.nome || '').trim()
-    if (!nome) { setErroDesafio('Informe o nome do desafio.'); return }
-    if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return }
-    const numero = nextSequential(desafios as any, 'numero' as any, 1)
-    const { data, error } = await supabase.from('desafios').insert([{
-      numero, nome, descricao: (novoDesafio.descricao||'').trim(), pontuacao_max: Number(novoDesafio.pontuacaoMax)||0
-    }]).select().single()
-    if (error) { setErroDesafio(error.message); return }
-    setDesafios(prev => [...prev, data as any])
-    setNovoDesafio({ nome:'', descricao:'', pontuacaoMax: 100 })
-    setErroDesafio('')
-  }
-
-  function removerDesafio(id: string) {
-    const d = desafios.find(x => x.id === id)
-    if (confirm(`Excluir o desafio "${d?.nome}"?`)) {
-      supabase.from('desafios').delete().eq('id', id).then(() => loadAll())
+    setErroDesafio('');
+    const nome = (novoDesafio.nome || '').trim();
+    if (!nome) { setErroDesafio('Informe o nome do desafio.'); return; }
+    if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return; }
+  
+    try {
+      const numero = nextSequential(desafios as any, 'numero' as any, 1);
+      const { error } = await supabase
+        .from('desafios')
+        .insert([{
+          numero,
+          nome,
+          descricao: (novoDesafio.descricao || '').trim(),
+          pontuacao_max: Number(novoDesafio.pontuacaoMax) || 0
+        }]);
+  
+      if (error) throw error;
+  
+      // Recarrega do banco para garantir que a lista reflita o servidor
+      await loadAll();
+      setNovoDesafio({ nome: '', descricao: '', pontuacaoMax: 100 });
+    } catch (err: any) {
+      setErroDesafio(err?.message || 'Falha ao salvar o desafio.');
     }
   }
 
   async function criarPessoa() {
-    const nome = (novaPessoa.nome || '').trim()
-    if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return }
-    if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return }
-    const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1)
-    const { data, error } = await supabase.from('pessoas').insert([{ inscricao, nome }]).select().single()
-    if (error) { setErroPessoa(error.message); return }
-    setPessoas(prev => [...prev, data as any])
-    setNovaPessoa({ nome: '' })
-    setErroPessoa('')
+    setErroPessoa('');
+    const nome = (novaPessoa.nome || '').trim();
+    if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return; }
+    if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return; }
+  
+    try {
+      const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1);
+      const { error } = await supabase
+        .from('pessoas')
+        .insert([{ inscricao, nome }]);
+  
+      if (error) throw error;
+  
+      await loadAll();
+      setNovaPessoa({ nome: '' });
+    } catch (err: any) {
+      setErroPessoa(err?.message || 'Falha ao salvar a pessoa.');
+    }
   }
 
   function removerPessoa(id: string) {
