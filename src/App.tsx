@@ -159,13 +159,32 @@ export default function App() {
     return () => { sub.subscription.unsubscribe() }
   }, [])
 
-  // 🔄 Renovação automática do token a cada 30s (Free plan)
+  
   useEffect(() => {
     const interval = setInterval(() => {
       ensureFreshSession(30).catch(() => {})
     }, 30_000)
     return () => clearInterval(interval)
   }, [])
+
+  // Renova quando a janela volta ao foco / aba fica visível
+  useEffect(() => {
+    function onFocus() {
+      ensureFreshSession(60).catch(() => {})
+    }
+    function onVisibility() {
+      if (document.visibilityState === 'visible') {
+        ensureFreshSession(60).catch(() => {})
+      }
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [])
+
 
   async function loadRole(userId: string) {
     await ensureFreshSession()
