@@ -102,7 +102,7 @@ function friendlyAuthError(err: any): string {
   }, [])
 
   async function loadRole(userId: string) {
-    const { data } = await supabasupabase.from('app_roles').select('role').eq('user_id', userId).single()
+    const { data } = await supabase.from('app_roles').select('role').eq('user_id', userId).single()
     setRole((data?.role as Role) ?? 'user')
   }
 
@@ -113,13 +113,14 @@ function friendlyAuthError(err: any): string {
     if (error) { setLoginErr(error.message); return }
     setAuthed(!!data.session)
   }
-  async function doLogout() { await supabase.auth.signOut() }
+  
+  async function doLogout() { await supabase.auth.signOut(); window.location.assign('/'); }
 
   async function loadAll() {
     const [d1, d2, d3] = await Promise.all([
-      supabasupabase.from('desafios').select('id, numero, nome, descricao, pontuacao_max').order('numero'),
-      supabasupabase.from('pessoas').select('id, inscricao, nome').order('inscricao'),
-      supabasupabase.from('pontuacoes').select('pessoa_id, desafio_id, score'),
+      supabase.from('desafios').select('id, numero, nome, descricao, pontuacao_max').order('numero'),
+      supabase.from('pessoas').select('id, inscricao, nome').order('inscricao'),
+      supabase.from('pontuacoes').select('pessoa_id, desafio_id, score'),
     ])
     setDesafios((d1.data || []) as any)
     setPessoas((d2.data || []) as any)
@@ -215,16 +216,26 @@ function friendlyAuthError(err: any): string {
 
   async function removerDesafio(id: string) {
     const d = desafios.find(x => x.id === id)
-    if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
+    if (
+      !confirm(
+        `Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`
+      )
+    ) {
       return
     }
-await withAuthRetry(() => supabase.from('pontuacoes').delete().eq('desafio_id', id)
-      .then(() => supabasupabase.from('desafios').delete().eq('id', id))
-      .then(() => loadAll())
-      .catch(err => {
-        console.error(err)
-        alert('Falha ao excluir desafio. Veja o console para detalhes.')
-      })
+  
+    try {
+      await withAuthRetry(() =>
+        supabase.from('pontuacoes').delete().eq('desafio_id', id)
+      )
+      await withAuthRetry(() =>
+        supabase.from('desafios').delete().eq('id', id)
+      )
+      await loadAll()
+    } catch (err) {
+      console.error(err)
+      alert('Falha ao excluir desafio. Veja o console para detalhes.')
+    }
   }
 
   /* === criar/remover PESSOA === */
@@ -263,21 +274,25 @@ await withAuthRetry(() => supabase.from('pontuacoes').delete().eq('desafio_id', 
     }
   }
 
-  function removerPessoa(id: string) {
+  async function removerPessoa(id: string) {
     const p = pessoas.find(x => x.id === id)
     if (!confirm(`Excluir a pessoa "${p?.nome}"?`)) return
-await withAuthRetry(() => supabase.from('pessoas').delete().eq('id', id)
-      .then(() => loadAll())
-      .catch(err => {
-        console.error(err)
-        alert('Falha ao excluir pessoa. Veja o console para detalhes.')
-      })
+  
+    try {
+      await withAuthRetry(() =>
+        supabase.from('pessoas').delete().eq('id', id)
+      )
+      await loadAll()
+    } catch (err) {
+      console.error(err)
+      alert('Falha ao excluir pessoa. Veja o console para detalhes.')
+    }
   }
 
   /* === atualizar pontuação === */
   async function atualizarPontuacao(pessoaId: string, desafioId: string, valor: number) {
     const v = Math.max(0, Number(valor) || 0)
-    const { error } = await supabasupabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
+    const { error } = await supabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
     if (!error) {
       setPontuacoes(prev => {
         const idx = prev.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
