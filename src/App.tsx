@@ -36,125 +36,63 @@ export default function App() {
 
   const [desafioSelecionado, setDesafioSelecionado] = useState<string>('')
 
-  
-
-// Retry automático quando JWT expira (plano Free)
-// Retry automático quando JWT expira (plano Free)
-catch (e: any) {
-    const msg = (e?.message || '').toLowerCase()
-    const status = e?.status ?? e?.code
-    const looksExpired = status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
-    if (looksExpired) {
-      try { await supabase.auth.refreshSession() } catch {}
+  // ===================== Helpers de sessão e erros =====================
+  // Retry automático quando JWT expira (plano Free)
+  async function withAuthRetry(run: () => Promise<any>): Promise<any> {
+    try {
       return await run()
+    } catch (e: any) {
+      const msg = (e?.message || '').toLowerCase()
+      const status = e?.status ?? e?.code
+      const looksExpired = status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
+      if (looksExpired) {
+        try { await supabase.auth.refreshSession() } catch {}
+        return await run()
+      }
+      throw e
     }
-    throw e
   }
-}
 
-// Garante que a Promise não fica pendurada
-// Renova sessão se expira em breve
-  } catch {}
-}
+  // Garante que a Promise não fica pendurada
+  function withTimeout(p: Promise<any>, ms = 10000): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const id = setTimeout(() => reject(new Error('timeout')), ms)
+      p.then(v => { clearTimeout(id); resolve(v) })
+       .catch(e => { clearTimeout(id); reject(e) })
+    })
+  }
 
-// Mensagem amigável para falhas de login
-  if (/email not confirmed|email confirmation/.test(msg)) {
-    return "E-mail não confirmado. Verifique sua caixa de entrada."
+  // Renova sessão se expira em breve
+  async function ensureFreshSession(thresholdSec = 30) {
+    try {
+      const { data } = await supabase.auth.getSession()
+      const exp = data.session?.expires_at ?? 0
+      const now = Math.floor(Date.now() / 1000)
+      if (!exp || exp - now < thresholdSec) {
+        await supabase.auth.refreshSession().catch(() => {})
+      }
+    } catch {}
   }
-  if (/rate limit|too many requests|429/.test(msg)) {
-    return "Muitas tentativas. Aguarde um pouco e tente novamente."
-  }
-  return "Não foi possível entrar agora. Tente novamente em instantes."
-}
 
-  if (/email not confirmed|email confirmation/.test(msg)) {
-    return "E-mail não confirmado. Verifique sua caixa de entrada."
-  }
-  if (/rate limit|too many requests|429/.test(msg)) {
-    return "Muitas tentativas. Aguarde um pouco e tente novamente."
-  }
-  return "Não foi possível entrar agora. Tente novamente em instantes."
-}
-
-// Retry automático quando JWT expira (plano Free)
-      return await run()
+  // Mensagem amigável para falhas de login
+  function friendlyAuthError(err: any): string {
+    if (!err) return "Falha ao entrar. Tente novamente."
+    const msg = (err?.message || "").toLowerCase()
+    const status = err?.status
+    if (status === 400 || /invalid login credentials/.test(msg) || /invalid credentials/.test(msg)) {
+      return "E-mail ou senha inválidos."
     }
-    throw e
-  }
-}
-
-// Garante que a Promise não fica pendurada
-// Renova sessão se expira em breve
-  } catch {}
-}
-
-// Mensagem amigável para falhas de login
-  if (/email not confirmed|email confirmation/.test(msg)) {
-    return "E-mail não confirmado. Verifique sua caixa de entrada."
-  }
-  if (/rate limit|too many requests|429/.test(msg)) {
-    return "Muitas tentativas. Aguarde um pouco e tente novamente."
-  }
-  return "Não foi possível entrar agora. Tente novamente em instantes."
-}
-
-// ===================== Helpers de sessão e erros =====================
-// Retry automático quando JWT expira (plano Free)
-async function withAuthRetry(run: () => Promise<any>): Promise<any> {
-  try {
-    return await run()
-  } catch (e: any) {
-    const msg = (e?.message || '').toLowerCase()
-    const status = e?.status ?? e?.code
-    const looksExpired = status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
-    if (looksExpired) {
-      try { await supabase.auth.refreshSession() } catch {}
-      return await run()
+    if (/email not confirmed|email confirmation/.test(msg)) {
+      return "E-mail não confirmado. Verifique sua caixa de entrada."
     }
-    throw e
-  }
-}
-
-// Garante que a Promise não fica pendurada
-function withTimeout(p: Promise<any>, ms = 10000): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const id = setTimeout(() => reject(new Error('timeout')), ms)
-    p.then(v => { clearTimeout(id); resolve(v) })
-     .catch(e => { clearTimeout(id); reject(e) })
-  })
-}
-
-// Renova sessão se expira em breve
-async function ensureFreshSession(thresholdSec = 30) {
-  try {
-    const { data } = await supabase.auth.getSession()
-    const exp = data.session?.expires_at ?? 0
-    const now = Math.floor(Date.now() / 1000)
-    if (!exp || exp - now < thresholdSec) {
-      await supabase.auth.refreshSession().catch(() => {})
+    if (/rate limit|too many requests|429/.test(msg)) {
+      return "Muitas tentativas. Aguarde um pouco e tente novamente."
     }
-  } catch {}
-}
+    return "Não foi possível entrar agora. Tente novamente em instantes."
+  }
+  // =================== Fim helpers de sessão e erros ====================
 
-// Mensagem amigável para falhas de login
-function friendlyAuthError(err: any): string {
-  if (!err) return "Falha ao entrar. Tente novamente."
-  const msg = (err?.message || "").toLowerCase()
-  const status = err?.status
-  if (status === 400 || /invalid login credentials/.test(msg) || /invalid credentials/.test(msg)) {
-    return "E-mail ou senha inválidos."
-  }
-  if (/email not confirmed|email confirmation/.test(msg)) {
-    return "E-mail não confirmado. Verifique sua caixa de entrada."
-  }
-  if (/rate limit|too many requests|429/.test(msg)) {
-    return "Muitas tentativas. Aguarde um pouco e tente novamente."
-  }
-  return "Não foi possível entrar agora. Tente novamente em instantes."
-}
-// =================== Fim helpers de sessão e erros ====================
-
-/* feedback visual */
+  /* feedback visual */
   const [savingDesafio, setSavingDesafio] = useState(false)
   const [savingPessoa, setSavingPessoa] = useState(false)
 
@@ -186,7 +124,11 @@ function friendlyAuthError(err: any): string {
   }, [])
 
   async function loadRole(userId: string) {
-    const { data } = await withTimeout(withAuthRetry(() => supabase.from('app_roles').select('role').eq('user_id', userId).single()), 10000)
+    await ensureFreshSession()
+    const { data } = await withTimeout(
+      withAuthRetry(() => supabase.from('app_roles').select('role').eq('user_id', userId).single()),
+      10000
+    )
     setRole((data?.role as Role) ?? 'user')
   }
 
@@ -194,16 +136,24 @@ function friendlyAuthError(err: any): string {
     e?.preventDefault?.()
     setLoginErr('')
     const { data, error } = await supabase.auth.signInWithPassword({ email: login.email, password: login.pass })
-    if (error) { setLoginErr(error.message); return }
+    if (error) { setLoginErr(friendlyAuthError(error)); return }
     setAuthed(!!data.session)
   }
+
   async function doLogout() { await supabase.auth.signOut(); window.location.assign('/'); }
 
   async function loadAll() {
+    await ensureFreshSession()
     const [d1, d2, d3] = await Promise.all([
-      await withTimeout(withAuthRetry(() => supabase.from('desafios')), 10000).select('id, numero, nome, descricao, pontuacao_max').order('numero'),
-      await withTimeout(withAuthRetry(() => supabase.from('pessoas')), 10000).select('id, inscricao, nome').order('inscricao'),
-      await withTimeout(withAuthRetry(() => supabase.from('pontuacoes')), 10000).select('pessoa_id, desafio_id, score'),
+      withTimeout(withAuthRetry(() =>
+        supabase.from('desafios').select('id, numero, nome, descricao, pontuacao_max').order('numero')
+      ), 10000),
+      withTimeout(withAuthRetry(() =>
+        supabase.from('pessoas').select('id, inscricao, nome').order('inscricao')
+      ), 10000),
+      withTimeout(withAuthRetry(() =>
+        supabase.from('pontuacoes').select('pessoa_id, desafio_id, score')
+      ), 10000),
     ])
     setDesafios((d1.data || []) as any)
     setPessoas((d2.data || []) as any)
@@ -261,24 +211,26 @@ function friendlyAuthError(err: any): string {
   async function criarDesafio() {
     setErroDesafio(''); setLastApiError(''); setLastApiDebug(null)
 
-    // validações ANTES do saving
     const nome = (novoDesafio.nome || '').trim()
     if (!nome) { setErroDesafio('Informe o nome do desafio.'); return }
     if (nameExists(desafios as any, nome)) { setErroDesafio('Já existe um desafio com esse nome.'); return }
 
     setSavingDesafio(true)
     try {
+      await ensureFreshSession()
       const numero = nextSequential(desafios as any, 'numero' as any, 1)
 
-      const resp = await withTimeout(withAuthRetry(() => supabase.from('desafios').insert([{ numero, nome, descricao: (novoDesafio.descricao||'').trim(), pontuacao_max: Number(novoDesafio.pontuacaoMax)||0 }])
-        .select('*')
-        .single()), 10000)
+      const resp = await withTimeout(withAuthRetry(() =>
+        supabase.from('desafios')
+          .insert([{ numero, nome, descricao: (novoDesafio.descricao||'').trim(), pontuacao_max: Number(novoDesafio.pontuacaoMax)||0 }])
+          .select('*')
+          .single()
+      ), 10000)
 
       setLastApiDebug({ op: 'insert:desafios', resp })
       // @ts-ignore
       if (resp?.error) throw resp.error
 
-      // resp.data é o novo desafio
       if ((resp as any).data) {
         setDesafios(prev => [...prev, (resp as any).data as TDesafio])
       } else {
@@ -295,18 +247,23 @@ function friendlyAuthError(err: any): string {
     }
   }
 
-  async async function removerDesafio(id: string) {
+  async function removerDesafio(id: string) {
     const d = desafios.find(x => x.id === id)
     if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
       return
     }
-    supabase.from('pontuacoes').delete().eq('desafio_id', id)
-      .then(() => supabase.from('desafios').delete().eq('id', id))
-      .then(() => loadAll())
-      .catch(err => {
-        console.error(err)
-        alert('Falha ao excluir desafio. Veja o console para detalhes.')
-      })
+    try {
+      await withTimeout(withAuthRetry(() =>
+        supabase.from('pontuacoes').delete().eq('desafio_id', id)
+      ), 10000)
+      await withTimeout(withAuthRetry(() =>
+        supabase.from('desafios').delete().eq('id', id)
+      ), 10000)
+      await loadAll()
+    } catch (err) {
+      console.error(err)
+      alert('Falha ao excluir desafio. Veja o console para detalhes.')
+    }
   }
 
   /* === criar/remover PESSOA === */
@@ -319,11 +276,12 @@ function friendlyAuthError(err: any): string {
 
     setSavingPessoa(true)
     try {
+      await ensureFreshSession()
       const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1)
 
-      const resp = await withTimeout(withAuthRetry(() => supabase.from('pessoas').insert([{ inscricao, nome }])
-        .select('*')
-        .single()), 10000)
+      const resp = await withTimeout(withAuthRetry(() =>
+        supabase.from('pessoas').insert([{ inscricao, nome }]).select('*').single()
+      ), 10000)
 
       setLastApiDebug({ op: 'insert:pessoas', resp })
       // @ts-ignore
@@ -345,21 +303,27 @@ function friendlyAuthError(err: any): string {
     }
   }
 
-  async async function removerPessoa(id: string) {
+  async function removerPessoa(id: string) {
     const p = pessoas.find(x => x.id === id)
     if (!confirm(`Excluir a pessoa "${p?.nome}"?`)) return
-    supabase.from('pessoas').delete().eq('id', id)
-      .then(() => loadAll())
-      .catch(err => {
-        console.error(err)
-        alert('Falha ao excluir pessoa. Veja o console para detalhes.')
-      })
+    try {
+      await withTimeout(withAuthRetry(() =>
+        supabase.from('pessoas').delete().eq('id', id)
+      ), 10000)
+      await loadAll()
+    } catch (err) {
+      console.error(err)
+      alert('Falha ao excluir pessoa. Veja o console para detalhes.')
+    }
   }
 
   /* === atualizar pontuação === */
   async function atualizarPontuacao(pessoaId: string, desafioId: string, valor: number) {
     const v = Math.max(0, Number(valor) || 0)
-    const { error } = await withTimeout(withAuthRetry(() => supabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })), 10000)
+    await ensureFreshSession()
+    const { error } = await withTimeout(withAuthRetry(() =>
+      supabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
+    ), 10000)
     if (!error) {
       setPontuacoes(prev => {
         const idx = prev.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
