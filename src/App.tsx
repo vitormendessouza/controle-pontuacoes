@@ -39,8 +39,23 @@ export default function App() {
   
 
 // Retry automático quando JWT expira (plano Free)
+// Retry automático quando JWT expira (plano Free)
 type Runner<T> = () => Promise<T>
-async 
+const withAuthRetry = async <T>(run: Runner<T>): Promise<T> => {
+  try {
+    return await run()
+  } catch (e: any) {
+    const msg = (e?.message || '').toLowerCase()
+    const status = e?.status ?? e?.code
+    const looksExpired = status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
+    if (looksExpired) {
+      try { await supabase.auth.refreshSession() } catch {}
+      return await run()
+    }
+    throw e
+  }
+}
+
 // Garante que a Promise não fica pendurada
 function withTimeout<T>(p: Promise<T>, ms = 10000): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -61,20 +76,8 @@ async function ensureFreshSession(thresholdSec = 30) {
     }
   } catch {}
 }
-function withAuthRetry<T>(run: Runner<T>): Promise<T> {
-  try {
-    return await run()
-  } catch (e: any) {
-    const msg = (e?.message || '').toLowerCase()
-    const status = e?.status ?? e?.code
-    const looksExpired = status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
-    if (looksExpired) {
-      try { await supabase.auth.refreshSession() } catch {}
-      return await run()
-    }
-    throw e
-  }
-}
+
+// Mensagem amigável para falhas de login
 function friendlyAuthError(err: any): string {
   if (!err) return "Falha ao entrar. Tente novamente."
   const msg = (err?.message || "").toLowerCase()
@@ -82,6 +85,15 @@ function friendlyAuthError(err: any): string {
   if (status === 400 || /invalid login credentials/.test(msg) || /invalid credentials/.test(msg)) {
     return "E-mail ou senha inválidos."
   }
+  if (/email not confirmed|email confirmation/.test(msg)) {
+    return "E-mail não confirmado. Verifique sua caixa de entrada."
+  }
+  if (/rate limit|too many requests|429/.test(msg)) {
+    return "Muitas tentativas. Aguarde um pouco e tente novamente."
+  }
+  return "Não foi possível entrar agora. Tente novamente em instantes."
+}
+
   if (/email not confirmed|email confirmation/.test(msg)) {
     return "E-mail não confirmado. Verifique sua caixa de entrada."
   }
