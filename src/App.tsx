@@ -37,8 +37,8 @@ export default function App() {
   const [desafioSelecionado, setDesafioSelecionado] = useState<string>('')
 
   // ===================== Helpers de sessão e erros =====================
-  // Retry automático quando JWT expira (plano Free) — para chamadas que lançam erro
-  async function withAuthRetry(run: () => Promise<any>): Promise<any> {
+  // Retry automático quando JWT expira (para chamadas que lançam erro)
+  async function withAuthRetry<T>(run: () => Promise<T>): Promise<T> {
     try {
       return await run()
     } catch (e: any) {
@@ -53,7 +53,7 @@ export default function App() {
     }
   }
 
-  // Garante que a Promise não fica pendurada
+  // Timeout para evitar promises penduradas
   function withTimeout<T>(p: Promise<T>, ms = 10000): Promise<T> {
     return new Promise((resolve, reject) => {
       const id = setTimeout(() => reject(new Error('timeout')), ms)
@@ -62,7 +62,7 @@ export default function App() {
     })
   }
 
-  // Renova sessão se expira em breve
+  // Renova sessão se estiver perto de expirar
   async function ensureFreshSession(thresholdSec = 30) {
     try {
       const { data } = await supabase.auth.getSession()
@@ -74,14 +74,14 @@ export default function App() {
     } catch {}
   }
 
-  // Detecta erro de autenticação quando o Postgrest NÃO lança exceção
+  // Detecta erro 401 quando PostgREST devolve { error } mas não lança
   function isAuthExpired(err: any) {
     const msg = (err?.message || '').toLowerCase()
     const status = err?.status ?? err?.code
     return status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
   }
 
-  // Executa consulta Postgrest e, se vier error=401, renova e repete 1x
+  // Executa consulta PostgREST e, se vier error=401, renova e repete 1x
   async function runPgWithRetry<T>(
     run: () => Promise<{ data: T; error: any; status?: number }>
   ): Promise<{ data: T; error: any }> {
@@ -94,7 +94,7 @@ export default function App() {
     return { data, error }
   }
 
-  // Mensagem amigável para falhas de login
+  // Mensagem amigável de login
   function friendlyAuthError(err: any): string {
     if (!err) return "Falha ao entrar. Tente novamente."
     const msg = (err?.message || "").toLowerCase()
@@ -119,6 +119,22 @@ export default function App() {
   /* debug/erros de API exibidos na UI */
   const [lastApiError, setLastApiError] = useState<string>('')  // mostrado abaixo dos botões
   const [lastApiDebug, setLastApiDebug] = useState<any>(null)   // visível em Configurações (opcional)
+
+  // === Instrumentação para capturar erros silenciosos ===
+  useEffect(() => {
+    function onRejection(e: PromiseRejectionEvent) {
+      console.error('[UnhandledRejection]', e.reason)
+    }
+    function onError(e: ErrorEvent) {
+      console.error('[WindowError]', e.error || e.message)
+    }
+    window.addEventListener('unhandledrejection', onRejection)
+    window.addEventListener('error', onError)
+    return () => {
+      window.removeEventListener('unhandledrejection', onRejection)
+      window.removeEventListener('error', onError)
+    }
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -269,8 +285,18 @@ export default function App() {
       // @ts-ignore
       if (resp?.error) throw resp.error
 
-      if ((resp as any).data) {
-        setDesafios(prev => [...prev, (resp as any).data as TDesafio])
+      const novo = (resp as any).data
+      if (novo) {
+        try {
+          setDesafios(prev => {
+            const next = Array.isArray(prev) ? [...prev] : []
+            next.push(novo as TDesafio)
+            return next
+          })
+        } catch (sErr) {
+          console.error('[criarDesafio] erro ao atualizar estado:', sErr)
+          await loadAll()
+        }
       } else {
         await loadAll()
       }
@@ -282,6 +308,7 @@ export default function App() {
       setErroDesafio(err?.message || 'Falha ao salvar o desafio.')
     } finally {
       setSavingDesafio(false)
+      setTimeout(() => setSavingDesafio(false), 12_000) // failsafe
     }
   }
 
@@ -306,14 +333,16 @@ export default function App() {
 
   /* === criar/remover PESSOA === */
   async function criarPessoa() {
+    // limpa mensagens
     setErroPessoa(''); setLastApiError(''); setLastApiDebug(null)
 
-    const nome = (novaPessoa.nome || '').trim()
-    if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return }
-    if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return }
-
-    setSavingPessoa(true)
     try {
+      const nome = (novaPessoa.nome || '').trim()
+      if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return }
+      if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return }
+
+      setSavingPessoa(true)
+
       await ensureFreshSession()
       const inscricao = nextSequential(pessoas as any, 'inscricao' as any, 1)
 
@@ -325,8 +354,18 @@ export default function App() {
       // @ts-ignore
       if (resp?.error) throw resp.error
 
-      if ((resp as any).data) {
-        setPessoas(prev => [...prev, (resp as any).data as TPessoa])
+      const novo = (resp as any)?.data
+      if (novo) {
+        try {
+          setPessoas(prev => {
+            const next = Array.isArray(prev) ? [...prev] : []
+            next.push(novo as TPessoa)
+            return next
+          })
+        } catch (sErr) {
+          console.error('[criarPessoa] erro ao atualizar estado:', sErr)
+          await loadAll()
+        }
       } else {
         await loadAll()
       }
@@ -338,6 +377,7 @@ export default function App() {
       setErroPessoa(err?.message || 'Falha ao salvar a pessoa.')
     } finally {
       setSavingPessoa(false)
+      setTimeout(() => setSavingPessoa(false), 12_000) // failsafe
     }
   }
 
@@ -357,24 +397,37 @@ export default function App() {
 
   /* === atualizar pontuação === */
   async function atualizarPontuacao(pessoaId: string, desafioId: string, valor: number) {
-    const v = Math.max(0, Number(valor) || 0)
-    await ensureFreshSession()
+    try {
+      const v = Math.max(0, Number(valor) || 0)
+      await ensureFreshSession()
 
-    const { data, error } = await runPgWithRetry(() =>
-      supabase.from('pontuacoes')
-        .upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
-        .select('*')
-    )
-    if (error) {
-      console.error('[atualizarPontuacao] erro:', error)
-      return
+      const { data, error } = await runPgWithRetry(() =>
+        supabase.from('pontuacoes')
+          .upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
+          .select('*')
+      )
+      if (error) {
+        console.error('[atualizarPontuacao] erro:', error)
+        setLastApiError(error.message || 'Falha ao salvar pontuação.')
+        return
+      }
+
+      try {
+        setPontuacoes(prev => {
+          const list = Array.isArray(prev) ? [...prev] : []
+          const idx = list.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
+          if (idx >= 0) list[idx] = { pessoa_id: pessoaId, desafio_id: desafioId, score: v }
+          else list.push({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
+          return list
+        })
+      } catch (sErr) {
+        console.error('[atualizarPontuacao] erro ao atualizar estado:', sErr)
+        await loadAll()
+      }
+    } catch (err) {
+      console.error('[atualizarPontuacao] erro inesperado:', err)
+      setLastApiError('Falha ao salvar pontuação.')
     }
-
-    setPontuacoes(prev => {
-      const idx = prev.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
-      if (idx >= 0) { const copy = [...prev]; copy[idx] = { pessoa_id: pessoaId, desafio_id: desafioId, score: v }; return copy }
-      return [...prev, { pessoa_id: pessoaId, desafio_id: desafioId, score: v }]
-    })
   }
 
   if (!authed) {
