@@ -77,6 +77,29 @@ catch (e: any) {
 }
 
 // Retry automático quando JWT expira (plano Free)
+      return await run()
+    }
+    throw e
+  }
+}
+
+// Garante que a Promise não fica pendurada
+// Renova sessão se expira em breve
+  } catch {}
+}
+
+// Mensagem amigável para falhas de login
+  if (/email not confirmed|email confirmation/.test(msg)) {
+    return "E-mail não confirmado. Verifique sua caixa de entrada."
+  }
+  if (/rate limit|too many requests|429/.test(msg)) {
+    return "Muitas tentativas. Aguarde um pouco e tente novamente."
+  }
+  return "Não foi possível entrar agora. Tente novamente em instantes."
+}
+
+// ===================== Helpers de sessão e erros =====================
+// Retry automático quando JWT expira (plano Free)
 async function withAuthRetry(run: () => Promise<any>): Promise<any> {
   try {
     return await run()
@@ -129,6 +152,7 @@ function friendlyAuthError(err: any): string {
   }
   return "Não foi possível entrar agora. Tente novamente em instantes."
 }
+// =================== Fim helpers de sessão e erros ====================
 
 /* feedback visual */
   const [savingDesafio, setSavingDesafio] = useState(false)
@@ -271,7 +295,7 @@ function friendlyAuthError(err: any): string {
     }
   }
 
-  async function removerDesafio(id: string) {
+  async async function removerDesafio(id: string) {
     const d = desafios.find(x => x.id === id)
     if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
       return
@@ -321,7 +345,7 @@ function friendlyAuthError(err: any): string {
     }
   }
 
-  async function removerPessoa(id: string) {
+  async async function removerPessoa(id: string) {
     const p = pessoas.find(x => x.id === id)
     if (!confirm(`Excluir a pessoa "${p?.nome}"?`)) return
     supabase.from('pessoas').delete().eq('id', id)
