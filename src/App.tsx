@@ -102,7 +102,7 @@ function friendlyAuthError(err: any): string {
   }, [])
 
   async function loadRole(userId: string) {
-    const { data } = await supabase.from('app_roles').select('role').eq('user_id', userId).single()
+    const { data } = await supabasupabase.from('app_roles').select('role').eq('user_id', userId).single()
     setRole((data?.role as Role) ?? 'user')
   }
 
@@ -117,9 +117,9 @@ function friendlyAuthError(err: any): string {
 
   async function loadAll() {
     const [d1, d2, d3] = await Promise.all([
-      supabase.from('desafios').select('id, numero, nome, descricao, pontuacao_max').order('numero'),
-      supabase.from('pessoas').select('id, inscricao, nome').order('inscricao'),
-      supabase.from('pontuacoes').select('pessoa_id, desafio_id, score'),
+      supabasupabase.from('desafios').select('id, numero, nome, descricao, pontuacao_max').order('numero'),
+      supabasupabase.from('pessoas').select('id, inscricao, nome').order('inscricao'),
+      supabasupabase.from('pontuacoes').select('pessoa_id, desafio_id, score'),
     ])
     setDesafios((d1.data || []) as any)
     setPessoas((d2.data || []) as any)
@@ -213,13 +213,13 @@ function friendlyAuthError(err: any): string {
     }
   }
 
-  function removerDesafio(id: string) {
+  async function removerDesafio(id: string) {
     const d = desafios.find(x => x.id === id)
     if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
       return
     }
-await withAuthRetry(() => se.from('pontuacoes').delete().eq('desafio_id', id)
-      .then(() => supabase.from('desafios').delete().eq('id', id))
+await withAuthRetry(() => supabase.from('pontuacoes').delete().eq('desafio_id', id)
+      .then(() => supabasupabase.from('desafios').delete().eq('id', id))
       .then(() => loadAll())
       .catch(err => {
         console.error(err)
@@ -266,7 +266,7 @@ await withAuthRetry(() => se.from('pontuacoes').delete().eq('desafio_id', id)
   function removerPessoa(id: string) {
     const p = pessoas.find(x => x.id === id)
     if (!confirm(`Excluir a pessoa "${p?.nome}"?`)) return
-await withAuthRetry(() => se.from('pessoas').delete().eq('id', id)
+await withAuthRetry(() => supabase.from('pessoas').delete().eq('id', id)
       .then(() => loadAll())
       .catch(err => {
         console.error(err)
@@ -277,7 +277,7 @@ await withAuthRetry(() => se.from('pessoas').delete().eq('id', id)
   /* === atualizar pontuação === */
   async function atualizarPontuacao(pessoaId: string, desafioId: string, valor: number) {
     const v = Math.max(0, Number(valor) || 0)
-    const { error } = await supabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
+    const { error } = await supabasupabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
     if (!error) {
       setPontuacoes(prev => {
         const idx = prev.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
