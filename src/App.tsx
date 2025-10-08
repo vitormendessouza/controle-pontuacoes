@@ -23,7 +23,23 @@ export default function App() {
   const [role, setRole] = useState<Role>('user')
 
   const [login, setLogin] = useState({ email: '', pass: '' })
-  const [loginErr, setLoginErr] = useState('')
+  
+  function friendlyAuthError(err: any): string {
+    if (!err) return "Falha ao entrar. Tente novamente."
+    const msg = (err?.message || "").toLowerCase()
+    const status = err?.status
+    if (status === 400 || /invalid login credentials/.test(msg) || /invalid credentials/.test(msg)) {
+      return "E-mail ou senha inválidos."
+    }
+    if (/email not confirmed|email confirmation/.test(msg)) {
+      return "E-mail não confirmado. Verifique sua caixa de entrada."
+    }
+    if (/rate limit|too many requests|429/.test(msg)) {
+      return "Muitas tentativas. Aguarde um pouco e tente novamente."
+    }
+    return "Não foi possível entrar agora. Tente novamente em instantes."
+  }
+const [loginErr, setLoginErr] = useState('')
 
   const [desafios, setDesafios] = useState<TDesafio[]>([])
   const [pessoas, setPessoas] = useState<TPessoa[]>([])
