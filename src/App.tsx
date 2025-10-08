@@ -37,7 +37,7 @@ export default function App() {
   const [desafioSelecionado, setDesafioSelecionado] = useState<string>('')
 
   // ===================== Helpers de sessão e erros =====================
-  // Retry automático quando JWT expira (plano Free)
+  // Retry automático quando JWT expira (plano Free) — para chamadas que lançam erro
   async function withAuthRetry(run: () => Promise<any>): Promise<any> {
     try {
       return await run()
@@ -54,7 +54,7 @@ export default function App() {
   }
 
   // Garante que a Promise não fica pendurada
-  function withTimeout(p: Promise<any>, ms = 10000): Promise<any> {
+  function withTimeout<T>(p: Promise<T>, ms = 10000): Promise<T> {
     return new Promise((resolve, reject) => {
       const id = setTimeout(() => reject(new Error('timeout')), ms)
       p.then(v => { clearTimeout(id); resolve(v) })
@@ -74,14 +74,25 @@ export default function App() {
     } catch {}
   }
 
-  // 🔄 Renovação automática do token a cada 30 segundos
-useEffect(() => {
-  const interval = setInterval(() => {
-    ensureFreshSession(30).catch(() => {})
-  }, 30_000) // 30 segundos
-  return () => clearInterval(interval)
-}, [])
+  // Detecta erro de autenticação quando o Postgrest NÃO lança exceção
+  function isAuthExpired(err: any) {
+    const msg = (err?.message || '').toLowerCase()
+    const status = err?.status ?? err?.code
+    return status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
+  }
 
+  // Executa consulta Postgrest e, se vier error=401, renova e repete 1x
+  async function runPgWithRetry<T>(
+    run: () => Promise<{ data: T; error: any; status?: number }>
+  ): Promise<{ data: T; error: any }> {
+    let { data, error } = await run()
+    if (error && isAuthExpired(error)) {
+      try { await supabase.auth.refreshSession() } catch {}
+      const r2 = await run()
+      data = r2.data; error = r2.error
+    }
+    return { data, error }
+  }
 
   // Mensagem amigável para falhas de login
   function friendlyAuthError(err: any): string {
@@ -132,6 +143,14 @@ useEffect(() => {
     return () => { sub.subscription.unsubscribe() }
   }, [])
 
+  // 🔄 Renovação automática do token a cada 30s (Free plan)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      ensureFreshSession(30).catch(() => {})
+    }, 30_000)
+    return () => clearInterval(interval)
+  }, [])
+
   async function loadRole(userId: string) {
     await ensureFreshSession()
     const { data } = await withTimeout(
@@ -153,23 +172,33 @@ useEffect(() => {
 
   async function loadAll() {
     await ensureFreshSession()
-    const [d1, d2, d3] = await Promise.all([
-      withTimeout(withAuthRetry(() =>
-        supabase.from('desafios').select('id, numero, nome, descricao, pontuacao_max').order('numero')
-      ), 10000),
-      withTimeout(withAuthRetry(() =>
-        supabase.from('pessoas').select('id, inscricao, nome').order('inscricao')
-      ), 10000),
-      withTimeout(withAuthRetry(() =>
-        supabase.from('pontuacoes').select('pessoa_id, desafio_id, score')
-      ), 10000),
+    const [d1r, d2r, d3r] = await Promise.all([
+      runPgWithRetry(() =>
+        supabase.from('desafios')
+          .select('id, numero, nome, descricao, pontuacao_max')
+          .order('numero')
+      ),
+      runPgWithRetry(() =>
+        supabase.from('pessoas')
+          .select('id, inscricao, nome')
+          .order('inscricao')
+      ),
+      runPgWithRetry(() =>
+        supabase.from('pontuacoes')
+          .select('pessoa_id, desafio_id, score')
+      ),
     ])
-    setDesafios((d1.data || []) as any)
-    setPessoas((d2.data || []) as any)
-    setPontuacoes((d3.data || []) as any)
 
-    if (!desafioSelecionado && (d1.data || []).length) {
-      setDesafioSelecionado((d1.data as any)[0].id)
+    if (d1r.error) console.warn('[loadAll] desafios:', d1r.error)
+    if (d2r.error) console.warn('[loadAll] pessoas:', d2r.error)
+    if (d3r.error) console.warn('[loadAll] pontuacoes:', d3r.error)
+
+    setDesafios((d1r.data || []) as any)
+    setPessoas((d2r.data || []) as any)
+    setPontuacoes((d3r.data || []) as any)
+
+    if (!desafioSelecionado && (d1r.data || []).length) {
+      setDesafioSelecionado((d1r.data as any)[0].id)
     }
   }
 
@@ -330,16 +359,22 @@ useEffect(() => {
   async function atualizarPontuacao(pessoaId: string, desafioId: string, valor: number) {
     const v = Math.max(0, Number(valor) || 0)
     await ensureFreshSession()
-    const { error } = await withTimeout(withAuthRetry(() =>
-      supabase.from('pontuacoes').upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
-    ), 10000)
-    if (!error) {
-      setPontuacoes(prev => {
-        const idx = prev.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
-        if (idx >= 0) { const copy = [...prev]; copy[idx] = { pessoa_id: pessoaId, desafio_id: desafioId, score: v }; return copy }
-        return [...prev, { pessoa_id: pessoaId, desafio_id: desafioId, score: v }]
-      })
+
+    const { data, error } = await runPgWithRetry(() =>
+      supabase.from('pontuacoes')
+        .upsert({ pessoa_id: pessoaId, desafio_id: desafioId, score: v })
+        .select('*')
+    )
+    if (error) {
+      console.error('[atualizarPontuacao] erro:', error)
+      return
     }
+
+    setPontuacoes(prev => {
+      const idx = prev.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
+      if (idx >= 0) { const copy = [...prev]; copy[idx] = { pessoa_id: pessoaId, desafio_id: desafioId, score: v }; return copy }
+      return [...prev, { pessoa_id: pessoaId, desafio_id: desafioId, score: v }]
+    })
   }
 
   if (!authed) {
