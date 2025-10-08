@@ -40,8 +40,44 @@ export default function App() {
 
 // Retry automático quando JWT expira (plano Free)
 // Retry automático quando JWT expira (plano Free)
-type Runner<T> = () => Promise<T>
-const withAuthRetry = async <T>(run: Runner<T>): Promise<T> => {
+catch (e: any) {
+    const msg = (e?.message || '').toLowerCase()
+    const status = e?.status ?? e?.code
+    const looksExpired = status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
+    if (looksExpired) {
+      try { await supabase.auth.refreshSession() } catch {}
+      return await run()
+    }
+    throw e
+  }
+}
+
+// Garante que a Promise não fica pendurada
+// Renova sessão se expira em breve
+  } catch {}
+}
+
+// Mensagem amigável para falhas de login
+  if (/email not confirmed|email confirmation/.test(msg)) {
+    return "E-mail não confirmado. Verifique sua caixa de entrada."
+  }
+  if (/rate limit|too many requests|429/.test(msg)) {
+    return "Muitas tentativas. Aguarde um pouco e tente novamente."
+  }
+  return "Não foi possível entrar agora. Tente novamente em instantes."
+}
+
+  if (/email not confirmed|email confirmation/.test(msg)) {
+    return "E-mail não confirmado. Verifique sua caixa de entrada."
+  }
+  if (/rate limit|too many requests|429/.test(msg)) {
+    return "Muitas tentativas. Aguarde um pouco e tente novamente."
+  }
+  return "Não foi possível entrar agora. Tente novamente em instantes."
+}
+
+// Retry automático quando JWT expira (plano Free)
+async function withAuthRetry(run: () => Promise<any>): Promise<any> {
   try {
     return await run()
   } catch (e: any) {
@@ -57,7 +93,7 @@ const withAuthRetry = async <T>(run: Runner<T>): Promise<T> => {
 }
 
 // Garante que a Promise não fica pendurada
-function withTimeout<T>(p: Promise<T>, ms = 10000): Promise<T> {
+function withTimeout(p: Promise<any>, ms = 10000): Promise<any> {
   return new Promise((resolve, reject) => {
     const id = setTimeout(() => reject(new Error('timeout')), ms)
     p.then(v => { clearTimeout(id); resolve(v) })
@@ -94,14 +130,6 @@ function friendlyAuthError(err: any): string {
   return "Não foi possível entrar agora. Tente novamente em instantes."
 }
 
-  if (/email not confirmed|email confirmation/.test(msg)) {
-    return "E-mail não confirmado. Verifique sua caixa de entrada."
-  }
-  if (/rate limit|too many requests|429/.test(msg)) {
-    return "Muitas tentativas. Aguarde um pouco e tente novamente."
-  }
-  return "Não foi possível entrar agora. Tente novamente em instantes."
-}
 /* feedback visual */
   const [savingDesafio, setSavingDesafio] = useState(false)
   const [savingPessoa, setSavingPessoa] = useState(false)
@@ -243,7 +271,7 @@ function friendlyAuthError(err: any): string {
     }
   }
 
-  function removerDesafio(id: string) {
+  async function removerDesafio(id: string) {
     const d = desafios.find(x => x.id === id)
     if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
       return
@@ -293,7 +321,7 @@ function friendlyAuthError(err: any): string {
     }
   }
 
-  function removerPessoa(id: string) {
+  async function removerPessoa(id: string) {
     const p = pessoas.find(x => x.id === id)
     if (!confirm(`Excluir a pessoa "${p?.nome}"?`)) return
     supabase.from('pessoas').delete().eq('id', id)
