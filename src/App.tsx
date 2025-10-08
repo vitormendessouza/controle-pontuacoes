@@ -23,8 +23,39 @@ export default function App() {
   const [role, setRole] = useState<Role>('user')
 
   const [login, setLogin] = useState({ email: '', pass: '' })
+  const [loginErr, setLoginErr] = useState('')
+
+  const [desafios, setDesafios] = useState<TDesafio[]>([])
+  const [pessoas, setPessoas] = useState<TPessoa[]>([])
+  const [pontuacoes, setPontuacoes] = useState<TPontuacao[]>([])
+
+  const [novoDesafio, setNovoDesafio] = useState({ nome: '', descricao: '', pontuacaoMax: 100 })
+  const [novaPessoa, setNovaPessoa] = useState({ nome: '' })
+  const [erroDesafio, setErroDesafio] = useState('')
+  const [erroPessoa, setErroPessoa] = useState('')
+
+  const [desafioSelecionado, setDesafioSelecionado] = useState<string>('')
+
   
-  function friendlyAuthError(err: any): string {
+  // Mensagem amigável para falhas de login
+  
+  // Retry automático quando JWT expira (plano Free)
+  type Runner<T> = () => Promise<T>
+  async function withAuthRetry<T>(run: Runner<T>): Promise<T> {
+    try {
+      return await run()
+    } catch (e: any) {
+      const msg = (e?.message || '').toLowerCase()
+      const status = e?.status ?? e?.code
+      const looksExpired = status === 401 || /jwt.*expired/.test(msg) || /token.*expired/.test(msg)
+      if (looksExpired) {
+        try { await supabase.auth.refreshSession() } catch {}
+        return await run()
+      }
+      throw e
+    }
+  }
+function friendlyAuthError(err: any): string {
     if (!err) return "Falha ao entrar. Tente novamente."
     const msg = (err?.message || "").toLowerCase()
     const status = err?.status
@@ -39,20 +70,7 @@ export default function App() {
     }
     return "Não foi possível entrar agora. Tente novamente em instantes."
   }
-const [loginErr, setLoginErr] = useState('')
-
-  const [desafios, setDesafios] = useState<TDesafio[]>([])
-  const [pessoas, setPessoas] = useState<TPessoa[]>([])
-  const [pontuacoes, setPontuacoes] = useState<TPontuacao[]>([])
-
-  const [novoDesafio, setNovoDesafio] = useState({ nome: '', descricao: '', pontuacaoMax: 100 })
-  const [novaPessoa, setNovaPessoa] = useState({ nome: '' })
-  const [erroDesafio, setErroDesafio] = useState('')
-  const [erroPessoa, setErroPessoa] = useState('')
-
-  const [desafioSelecionado, setDesafioSelecionado] = useState<string>('')
-
-  /* feedback visual */
+/* feedback visual */
   const [savingDesafio, setSavingDesafio] = useState(false)
   const [savingPessoa, setSavingPessoa] = useState(false)
 
@@ -200,7 +218,7 @@ const [loginErr, setLoginErr] = useState('')
     if (!confirm(`Excluir o desafio "${d?.nome}"? Isso removerá apenas as pontuações desse desafio (as pessoas serão mantidas).`)) {
       return
     }
-    supabase.from('pontuacoes').delete().eq('desafio_id', id)
+await withAuthRetry(() => se.from('pontuacoes').delete().eq('desafio_id', id)
       .then(() => supabase.from('desafios').delete().eq('id', id))
       .then(() => loadAll())
       .catch(err => {
@@ -212,7 +230,6 @@ const [loginErr, setLoginErr] = useState('')
   /* === criar/remover PESSOA === */
   async function criarPessoa() {
     setErroPessoa(''); setLastApiError(''); setLastApiDebug(null)
-
     const nome = (novaPessoa.nome || '').trim()
     if (!nome) { setErroPessoa('Informe o nome da pessoa.'); return }
     if (nameExists(pessoas as any, nome)) { setErroPessoa('Já existe uma pessoa com esse nome.'); return }
@@ -249,7 +266,7 @@ const [loginErr, setLoginErr] = useState('')
   function removerPessoa(id: string) {
     const p = pessoas.find(x => x.id === id)
     if (!confirm(`Excluir a pessoa "${p?.nome}"?`)) return
-    supabase.from('pessoas').delete().eq('id', id)
+await withAuthRetry(() => se.from('pessoas').delete().eq('id', id)
       .then(() => loadAll())
       .catch(err => {
         console.error(err)
@@ -264,8 +281,7 @@ const [loginErr, setLoginErr] = useState('')
     if (!error) {
       setPontuacoes(prev => {
         const idx = prev.findIndex(r => r.pessoa_id === pessoaId && r.desafio_id === desafioId)
-        if (idx >= 0) { const copy = [...prev]; copy[idx] = { pessoa_id: pessoaId, desafio_id: desafioId, score: v }; return copy }
-        return [...prev, { pessoa_id: pessoaId, desafio_id: desafioId, score: v }]
+        if (idx >= 0) { const copy = [...prev]; copy[idx] = { pessoa_id: pessoaId, desafio_id: desafioId, score: v }; return copy }        return [...prev, { pessoa_id: pessoaId, desafio_id: desafioId, score: v }]
       })
     }
   }
