@@ -74,6 +74,15 @@ export default function App() {
     } catch {}
   }
 
+  // 🔄 Renovação automática do token a cada 30 segundos
+useEffect(() => {
+  const interval = setInterval(() => {
+    ensureFreshSession(30).catch(() => {})
+  }, 30_000) // 30 segundos
+  return () => clearInterval(interval)
+}, [])
+
+
   // Mensagem amigável para falhas de login
   function friendlyAuthError(err: any): string {
     if (!err) return "Falha ao entrar. Tente novamente."
