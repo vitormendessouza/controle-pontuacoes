@@ -684,8 +684,7 @@ export default function App() {
                         </td>
                       ))}
                       <td className="text-right">
-                        <button className="ghost trash-btn" onClick={()=>removerPessoa(p.id)} title="Excluir">🗑️</button>
-
+                        <<button className="ghost" onClick={()=>removerPessoa(p.id)} title="Excluir">🗑️</button>
                       </td>
                     </tr>
                   ))}
