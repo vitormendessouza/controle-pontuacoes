@@ -641,7 +641,10 @@ export default function App() {
                     <th>Nome</th>
                     {desafios.map(d=>(
                       <th key={d.id} className="text-right">
-                        {d.nome} <span className="muted">/ {d.pontuacao_max}</span>
+                        <span className="th-desafio">
+                          <span>{d.nome}</span>
+                          <span className="th-max muted">/ {d.pontuacao_max}</span>
+                        </span>
                       </th>
                     ))}
                     <th className="text-right">Ações</th>
@@ -681,7 +684,8 @@ export default function App() {
                         </td>
                       ))}
                       <td className="text-right">
-                        <button className="ghost" onClick={()=>removerPessoa(p.id)} title="Excluir">🗑️</button>
+                        <button className="ghost trash-btn" onClick={()=>removerPessoa(p.id)} title="Excluir">🗑️</button>
+
                       </td>
                     </tr>
                   ))}
