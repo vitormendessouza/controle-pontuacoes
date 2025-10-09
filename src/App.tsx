@@ -185,6 +185,40 @@ export default function App() {
     }
   }, [])
 
+  useEffect(() => {
+    let mounted = true
+  
+    // 1) Hidrata a sessão na carga
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return
+      setSession(data.session ?? null)
+    })
+  
+    // 2) Mantém estado sincronizado
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setSession(session ?? null)
+    })
+  
+    return () => {
+      mounted = false
+      sub.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState === 'visible') {
+        // garante retomada e força uma checada
+        supabase.auth.startAutoRefresh()
+        supabase.auth.getSession()
+      } else {
+        supabase.auth.stopAutoRefresh()
+      }
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [])
+
 
   async function loadRole(userId: string) {
     await ensureFreshSession()
