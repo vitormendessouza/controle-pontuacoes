@@ -530,7 +530,7 @@ export default function App() {
 
         {/* DESAFIOS */}
         {tab==='desafios' && (
-          <div className="row row-2">
+          <div className="stack">
             <div className="card">
               <h3>Novo Desafio</h3>
               <div className="grid">
@@ -608,7 +608,7 @@ export default function App() {
 
         {/* PESSOAS */}
         {tab==='pessoas' && (
-          <div className="row row-2">
+          <div className="stack">
             <div className="card">
               <h3>Nova Pessoa</h3>
               <div className="grid">
