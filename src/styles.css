@@ -198,3 +198,41 @@ table.lista-pessoas td.cell-nome .truncate {
 .stack > * {
   width: 100%;
 }
+
+/* ====== Ajustes só para a Lista de Pessoas ====== */
+
+/* já forçamos fixed p/ as larguras funcionarem bem */
+table.lista-pessoas {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* 1ª coluna: Nº Inscrição (mais estreita) */
+table.lista-pessoas th:first-child,
+table.lista-pessoas td:first-child {
+  width: 80px;              /* ajuste se quiser ainda menor/maior */
+  white-space: nowrap;
+}
+
+/* 2ª coluna: Nome (mais larga que antes) */
+table.lista-pessoas td.cell-nome {
+  min-width: 0;
+  max-width: 360px;         /* era 260px — aumentamos */
+}
+
+/* título do desafio em duas linhas (nome em cima, max embaixo) */
+table.lista-pessoas th .th-desafio {
+  display: inline-block;    /* garante quebra consistente */
+  line-height: 1.15;
+}
+table.lista-pessoas th .th-desafio .th-max {
+  display: block;           /* força a segunda linha */
+  font-size: 0.9em;         /* levemente menor */
+}
+
+/* botão de lixeira menor */
+table.lista-pessoas .trash-btn {
+  padding: 2px 6px;
+  font-size: 14px;
+  line-height: 1;
+}
