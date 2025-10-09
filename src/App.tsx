@@ -634,7 +634,7 @@ export default function App() {
             <div className="card" style={{overflowX:'auto'}}>
               <h3>Lista de Pessoas e Pontuações</h3>
               <div className="table-wrap">
-                <table>
+                <table className="lista-pessoas">
                   <thead>
                   <tr>
                     <th>Nº Inscrição</th>
@@ -651,7 +651,11 @@ export default function App() {
                   {pessoas.map(p=>(
                     <tr key={p.id}>
                       <td>{p.inscricao}</td>
-                      <td><strong>{p.nome}</strong></td>
+                      <td className="cell-nome">
+                        <span className="truncate" title={p.nome}>
+                          <strong>{p.nome}</strong>
+                        </span>
+                      </td>
                       {desafios.map(d=>(
                         <td key={d.id} className="text-right">
                         <input
