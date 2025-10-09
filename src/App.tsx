@@ -543,9 +543,15 @@ export default function App() {
                     <label>Pontuação Máxima</label>
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={0}
                       value={novoDesafio.pontuacaoMax}
                       onChange={e=>setNovoDesafio({...novoDesafio, pontuacaoMax: Number(e.target.value)})}
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                      onKeyDown={(e) => {
+                        const block = ['e', 'E', '+', '-', '.']
+                        if (block.includes(e.key)) e.preventDefault()
+                      }}
                     />
                   </div>
                 </div>
@@ -648,20 +654,26 @@ export default function App() {
                       <td><strong>{p.nome}</strong></td>
                       {desafios.map(d=>(
                         <td key={d.id} className="text-right">
-                          <input
-                            style={{width:80, textAlign:'right'}}
-                            type="number"
-                            min={0}
-                            max={d.pontuacao_max}
-                            value={mapPont.get(p.id)?.get(d.id) ?? 0}
-                            onChange={e =>
-                              atualizarPontuacao(
-                                p.id,
-                                d.id,
-                                Math.max(0, Math.min(Number(d.pontuacao_max), Number(e.target.value)))
-                              )
-                            }
-                          />
+                        <input
+                          style={{width:80, textAlign:'right'}}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={d.pontuacao_max}
+                          value={mapPont.get(p.id)?.get(d.id) ?? 0}
+                          onChange={e =>
+                            atualizarPontuacao(
+                              p.id,
+                              d.id,
+                              Math.max(0, Math.min(Number(d.pontuacao_max), Number(e.target.value)))
+                            )
+                          }
+                          onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                          onKeyDown={(e) => {
+                            const block = ['e', 'E', '+', '-', '.']
+                            if (block.includes(e.key)) e.preventDefault()
+                          }}
+                        />
                         </td>
                       ))}
                       <td className="text-right">
