@@ -186,3 +186,15 @@ table.lista-pessoas td.cell-nome .truncate {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* empilha cadastro (topo) + lista (abaixo) */
+.stack {
+  display: grid;
+  grid-template-columns: 1fr; /* sempre 1 coluna */
+  gap: 16px;                  /* ajuste se quiser mais/menos espaço */
+}
+
+/* garante que os cards e tabelas ocupem toda a largura quando empilhados */
+.stack > * {
+  width: 100%;
+}
