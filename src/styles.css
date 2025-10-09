@@ -165,3 +165,24 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* ====== Lista de Pessoas e Pontuações (apenas essa tabela) ====== */
+
+/* Garante que as colunas respeitem as larguras e o ellipsis funcione */
+table.lista-pessoas {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Coluna do nome: limite de largura e permite truncar */
+table.lista-pessoas td.cell-nome {
+  min-width: 0;
+  max-width: 260px;  /* ajuste conforme preferir */
+}
+
+/* Reticências quando o texto passar do limite */
+table.lista-pessoas td.cell-nome .truncate {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
