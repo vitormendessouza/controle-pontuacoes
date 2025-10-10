@@ -613,7 +613,7 @@ export default function App() {
               <h3>Nova Pessoa</h3>
               <div className="grid">
                 <div>
-                  <label>Nº Inscrição</label>
+                  <label>Inscrição</label>
                   <input value={nextSequential(pessoas as any, 'inscricao' as any, 1)} readOnly />
                 </div>
                 <div>
