@@ -613,7 +613,7 @@ export default function App() {
               <h3>Nova Pessoa</h3>
               <div className="grid">
                 <div>
-                  <label>Inscrição</label>
+                  <label>Nº Inscrição</label>
                   <input value={nextSequential(pessoas as any, 'inscricao' as any, 1)} readOnly />
                 </div>
                 <div>
@@ -637,7 +637,7 @@ export default function App() {
                 <table className="lista-pessoas">
                   <thead>
                   <tr>
-                    <th>Nº Inscrição</th>
+                    <th>Inscrição</th>
                     <th>Nome</th>
                     {desafios.map(d=>(
                       <th key={d.id} className="text-right">
