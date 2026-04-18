@@ -250,6 +250,15 @@ export default function App() {
       if (d2r.error) { console.warn('[loadAll] pessoas:', d2r.error); erros.push('pessoas: ' + (d2r.error.message || 'erro')) }
       if (d3r.error) { console.warn('[loadAll] pontuacoes:', d3r.error); erros.push('pontuações: ' + (d3r.error.message || 'erro')) }
 
+      // Se TODAS as queries falharam com erro de auth, a sessão está morta → força logout
+      const allAuthFailed = [d1r, d2r, d3r].every(r => r.error && isAuthExpired(r.error))
+      if (allAuthFailed) {
+        console.warn('[loadAll] sessão expirada e irrecuperável — forçando logout')
+        await supabase.auth.signOut().catch(() => {})
+        window.location.assign('/')
+        return
+      }
+
       if (erros.length) {
         setLoadError('Falha ao carregar dados: ' + erros.join('; ') + '. Clique em "Recarregar" para tentar novamente.')
       }
