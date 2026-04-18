@@ -119,6 +119,8 @@ export default function App() {
   /* debug/erros de API exibidos na UI */
   const [lastApiError, setLastApiError] = useState<string>('')  // mostrado abaixo dos botões
   const [lastApiDebug, setLastApiDebug] = useState<any>(null)   // visível em Configurações (opcional)
+  const [loadError, setLoadError] = useState<string>('')
+  const [loadingData, setLoadingData] = useState(false)
 
   // === Instrumentação para capturar erros silenciosos ===
   useEffect(() => {
@@ -185,25 +187,8 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => {
-    let mounted = true
-  
-    // 1) Hidrata a sessão na carga
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return
-      setSession(data.session ?? null)
-    })
-  
-    // 2) Mantém estado sincronizado
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
-      setSession(session ?? null)
-    })
-  
-    return () => {
-      mounted = false
-      sub.subscription.unsubscribe()
-    }
-  }, [])
+  // (Removido useEffect duplicado que chamava setSession — função inexistente.
+  //  A sessão já é gerenciada pelo useEffect principal em linhas anteriores.)
 
   useEffect(() => {
     const handler = () => {
@@ -240,34 +225,47 @@ export default function App() {
   async function doLogout() { await supabase.auth.signOut(); window.location.assign('/'); }
 
   async function loadAll() {
-    await ensureFreshSession()
-    const [d1r, d2r, d3r] = await Promise.all([
-      runPgWithRetry(() =>
-        supabase.from('desafios')
-          .select('id, numero, nome, descricao, pontuacao_max')
-          .order('numero')
-      ),
-      runPgWithRetry(() =>
-        supabase.from('pessoas')
-          .select('id, inscricao, nome')
-          .order('inscricao')
-      ),
-      runPgWithRetry(() =>
-        supabase.from('pontuacoes')
-          .select('pessoa_id, desafio_id, score')
-      ),
-    ])
+    setLoadError(''); setLoadingData(true)
+    try {
+      await ensureFreshSession()
+      const [d1r, d2r, d3r] = await Promise.all([
+        runPgWithRetry(() =>
+          supabase.from('desafios')
+            .select('id, numero, nome, descricao, pontuacao_max')
+            .order('numero')
+        ),
+        runPgWithRetry(() =>
+          supabase.from('pessoas')
+            .select('id, inscricao, nome')
+            .order('inscricao')
+        ),
+        runPgWithRetry(() =>
+          supabase.from('pontuacoes')
+            .select('pessoa_id, desafio_id, score')
+        ),
+      ])
 
-    if (d1r.error) console.warn('[loadAll] desafios:', d1r.error)
-    if (d2r.error) console.warn('[loadAll] pessoas:', d2r.error)
-    if (d3r.error) console.warn('[loadAll] pontuacoes:', d3r.error)
+      const erros: string[] = []
+      if (d1r.error) { console.warn('[loadAll] desafios:', d1r.error); erros.push('desafios: ' + (d1r.error.message || 'erro')) }
+      if (d2r.error) { console.warn('[loadAll] pessoas:', d2r.error); erros.push('pessoas: ' + (d2r.error.message || 'erro')) }
+      if (d3r.error) { console.warn('[loadAll] pontuacoes:', d3r.error); erros.push('pontuações: ' + (d3r.error.message || 'erro')) }
 
-    setDesafios((d1r.data || []) as any)
-    setPessoas((d2r.data || []) as any)
-    setPontuacoes((d3r.data || []) as any)
+      if (erros.length) {
+        setLoadError('Falha ao carregar dados: ' + erros.join('; ') + '. Clique em "Recarregar" para tentar novamente.')
+      }
 
-    if (!desafioSelecionado && (d1r.data || []).length) {
-      setDesafioSelecionado((d1r.data as any)[0].id)
+      setDesafios((d1r.data || []) as any)
+      setPessoas((d2r.data || []) as any)
+      setPontuacoes((d3r.data || []) as any)
+
+      if (!desafioSelecionado && (d1r.data || []).length) {
+        setDesafioSelecionado((d1r.data as any)[0].id)
+      }
+    } catch (err: any) {
+      console.error('[loadAll] erro inesperado:', err)
+      setLoadError('Erro ao carregar dados: ' + (err?.message || 'falha desconhecida') + '. Clique em "Recarregar" para tentar novamente.')
+    } finally {
+      setLoadingData(false)
     }
   }
 
@@ -517,6 +515,21 @@ export default function App() {
           <button className="ghost" onClick={doLogout}>Sair</button>
         </div>
       </header>
+
+      {loadError && (
+        <div className="card" style={{background:'#fef2f2', borderLeft:'4px solid #b91c1c', marginBottom:12}}>
+          <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12}}>
+            <span className="danger" style={{fontSize:13}}>{loadError}</span>
+            <button style={{whiteSpace:'nowrap', minWidth:100}} onClick={() => loadAll()} disabled={loadingData}>
+              {loadingData ? 'Carregando...' : 'Recarregar'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loadingData && !loadError && (
+        <div className="muted" style={{textAlign:'center', padding:12}}>Carregando dados...</div>
+      )}
 
       <div className="card">
         <div className="tabs">
