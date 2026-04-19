@@ -10,5 +10,7 @@ export const supabase = createClient(url, anon, {
     detectSessionInUrl: true,
     // força storage do browser (evita SSR/Node quebrar):
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    // Desabilita Navigator Locks API — evita erro "Lock was released because another request stole it"
+    lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => fn(),
   },
 })
