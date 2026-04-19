@@ -16,6 +16,32 @@ function nextSequential<T>(arr: T[], field: keyof T, start = 1) {
   return nums.length ? Math.max(...nums) + 1 : start
 }
 
+function ScoreInput({ value, max, onSave }: { value: number; max: number; onSave: (v: number) => void }) {
+  const [local, setLocal] = useState<string>(String(value))
+  useEffect(() => { setLocal(String(value)) }, [value])
+  return (
+    <input
+      style={{width:80, textAlign:'right'}}
+      type="number"
+      inputMode="numeric"
+      min={0}
+      max={max}
+      value={local}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => {
+        const n = Math.max(0, Math.min(max, Number(local) || 0))
+        setLocal(String(n))
+        if (n !== value) onSave(n)
+      }}
+      onKeyDown={e => {
+        if (['e', 'E', '+', '-', '.'].includes(e.key)) e.preventDefault()
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+      }}
+      onWheel={e => (e.target as HTMLInputElement).blur()}
+    />
+  )
+}
+
 export default function App() {
   const [tab, setTab] = useState<'desafios'|'pessoas'|'rankingDesafio'|'rankingGeral'|'tabelaGeral'|'config'>('desafios')
   const [authed, setAuthed] = useState(false)
@@ -683,26 +709,11 @@ export default function App() {
                       </td>
                       {desafios.map(d=>(
                         <td key={d.id} className="text-right">
-                        <input
-                          style={{width:80, textAlign:'right'}}
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={d.pontuacao_max}
-                          value={mapPont.get(p.id)?.get(d.id) ?? 0}
-                          onChange={e =>
-                            atualizarPontuacao(
-                              p.id,
-                              d.id,
-                              Math.max(0, Math.min(Number(d.pontuacao_max), Number(e.target.value)))
-                            )
-                          }
-                          onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                          onKeyDown={(e) => {
-                            const block = ['e', 'E', '+', '-', '.']
-                            if (block.includes(e.key)) e.preventDefault()
-                          }}
-                        />
+                          <ScoreInput
+                            value={mapPont.get(p.id)?.get(d.id) ?? 0}
+                            max={d.pontuacao_max}
+                            onSave={v => atualizarPontuacao(p.id, d.id, v)}
+                          />
                         </td>
                       ))}
                       <td className="text-right">
