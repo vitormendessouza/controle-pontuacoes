@@ -88,13 +88,12 @@ export default function App() {
     })
   }
 
-  // Renova sessão se estiver perto de expirar
-  async function ensureFreshSession(thresholdSec = 30) {
+  // Verifica se a sessão está válida (sem forçar refresh — o autoRefreshToken cuida disso)
+  async function ensureFreshSession() {
     try {
       const { data } = await supabase.auth.getSession()
-      const exp = data.session?.expires_at ?? 0
-      const now = Math.floor(Date.now() / 1000)
-      if (!exp || exp - now < thresholdSec) {
+      if (!data.session) {
+        // Sessão inexistente — tenta recuperar uma vez
         await supabase.auth.refreshSession().catch(() => {})
       }
     } catch {}
@@ -187,41 +186,11 @@ export default function App() {
     return () => { sub.subscription.unsubscribe() }
   }, [])
 
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      ensureFreshSession(30).catch(() => {})
-    }, 30_000)
-    return () => clearInterval(interval)
-  }, [])
-
-  // Renova quando a janela volta ao foco / aba fica visível
-  useEffect(() => {
-    function onFocus() {
-      ensureFreshSession(60).catch(() => {})
-    }
-    function onVisibility() {
-      if (document.visibilityState === 'visible') {
-        ensureFreshSession(60).catch(() => {})
-      }
-    }
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => {
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [])
-
-  // (Removido useEffect duplicado que chamava setSession — função inexistente.
-  //  A sessão já é gerenciada pelo useEffect principal em linhas anteriores.)
-
+  // Gerencia auto-refresh: pausa quando a aba fica oculta, retoma quando volta
   useEffect(() => {
     const handler = () => {
       if (document.visibilityState === 'visible') {
-        // garante retomada e força uma checada
         supabase.auth.startAutoRefresh()
-        supabase.auth.getSession()
       } else {
         supabase.auth.stopAutoRefresh()
       }
