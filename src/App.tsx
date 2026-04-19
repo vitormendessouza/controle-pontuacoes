@@ -164,14 +164,8 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      const u = data.session?.user
-      if (u) {
-        setAuthed(true); setEmail(u.email || '')
-        await loadRole(u.id)
-        await loadAll()
-      }
-    })
+    // Apenas onAuthStateChange carrega os dados (ele dispara INITIAL_SESSION automaticamente).
+    // Isso evita loadAll() duplicado e race conditions com pontuações.
     const { data: sub } = supabase.auth.onAuthStateChange(async (_evt, sess) => {
       const u = sess?.user
       if (u) {
